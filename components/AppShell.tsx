@@ -1,0 +1,60 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+
+const NAV = [
+  { href: "/simulate", label: "Simulation Center", ready: true },
+  { href: "/overview", label: "Overview", ready: false },
+  { href: "/strategy-lab", label: "Strategy Lab", ready: false },
+  { href: "/agent", label: "Agent graph", ready: false },
+] as const;
+
+export function AppShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+
+  return (
+    <div className="flex min-h-screen">
+      <aside className="flex w-60 shrink-0 flex-col border-r border-border bg-surface px-5 py-8">
+        <Link href="/simulate" className="mb-10">
+          <p className="font-display text-xl tracking-tight text-foreground italic">
+            Recover AI
+          </p>
+          <p className="mt-1 text-[11px] uppercase tracking-[0.16em] text-muted">
+            Payment recovery
+          </p>
+        </Link>
+        <nav className="flex flex-col gap-1">
+          {NAV.map((item) => {
+            const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`rounded-md px-3 py-2 text-sm transition-colors ${
+                  active
+                    ? "bg-accent-muted text-accent"
+                    : "text-muted hover:bg-background hover:text-foreground"
+                }`}
+              >
+                <span className="flex items-center justify-between gap-2">
+                  {item.label}
+                  {!item.ready ? (
+                    <span className="text-[10px] uppercase tracking-wider text-muted/70">
+                      Later
+                    </span>
+                  ) : null}
+                </span>
+              </Link>
+            );
+          })}
+        </nav>
+        <p className="mt-auto text-[11px] leading-relaxed text-muted">
+          Razorpay test mode only. Simulation executor is the demo path until the agent
+          run is wired in Phase 2.
+        </p>
+      </aside>
+      <main className="min-w-0 flex-1 px-10 py-8">{children}</main>
+    </div>
+  );
+}
