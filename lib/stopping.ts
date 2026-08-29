@@ -43,6 +43,12 @@ export function shouldStop(input: {
   if (input.isPermanent) {
     return { stop: true, reason: "permanent_failure" };
   }
+  if (
+    input.recoveryProbability !== null &&
+    input.recoveryProbability < RECOVERY_PROBABILITY_THRESHOLD
+  ) {
+    return { stop: true, reason: "probability_below_threshold" };
+  }
   if (input.requiresAltMethod) {
     return { stop: true, reason: "alt_method_required" };
   }
@@ -51,12 +57,6 @@ export function shouldStop(input: {
   }
   if (input.automatedAttempts >= MAX_AUTOMATED_ATTEMPTS) {
     return { stop: true, reason: "max_attempts" };
-  }
-  if (
-    input.recoveryProbability !== null &&
-    input.recoveryProbability < RECOVERY_PROBABILITY_THRESHOLD
-  ) {
-    return { stop: true, reason: "probability_below_threshold" };
   }
   return { stop: false, reason: null };
 }

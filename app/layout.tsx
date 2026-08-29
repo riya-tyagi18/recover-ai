@@ -25,7 +25,7 @@ export const metadata: Metadata = {
     "Autonomous payment recovery agent — detect, diagnose, decide, execute.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html
       lang="en"

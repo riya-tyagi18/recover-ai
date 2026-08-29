@@ -1,5 +1,5 @@
-export const MAX_AUTOMATED_ATTEMPTS = 3
-export const RECOVERY_PROBABILITY_THRESHOLD = 15
+MAX_AUTOMATED_ATTEMPTS = 3
+RECOVERY_PROBABILITY_THRESHOLD = 15
 
 STOP_REASON_LABELS = {
     "max_attempts": "Stopped: reached the maximum of 3 automated recovery attempts.",
@@ -25,15 +25,15 @@ def should_stop(
         return True, "recovered"
     if is_permanent:
         return True, "permanent_failure"
+    if (
+        recovery_probability is not None
+        and recovery_probability < RECOVERY_PROBABILITY_THRESHOLD
+    ):
+        return True, "probability_below_threshold"
     if requires_alt_method:
         return True, "alt_method_required"
     if prior_failure_count >= 3:
         return True, "manual_review"
     if automated_attempts >= MAX_AUTOMATED_ATTEMPTS:
         return True, "max_attempts"
-    if (
-        recovery_probability is not None
-        and recovery_probability < RECOVERY_PROBABILITY_THRESHOLD
-    ):
-        return True, "probability_below_threshold"
     return False, None
