@@ -5,9 +5,9 @@ import { usePathname } from "next/navigation";
 
 const NAV = [
   { href: "/simulate", label: "Simulation Center", ready: true },
-  { href: "/overview", label: "Overview", ready: false },
-  { href: "/strategy-lab", label: "Strategy Lab", ready: false },
-  { href: "/agent", label: "Agent graph", ready: false },
+  { href: "/overview", label: "Overview", ready: true },
+  { href: "/strategy-lab", label: "Strategy Lab", ready: true },
+  { href: "/agent", label: "Agent Verification", ready: true },
 ] as const;
 
 export function AppShell({ children }: { children: React.ReactNode }) {

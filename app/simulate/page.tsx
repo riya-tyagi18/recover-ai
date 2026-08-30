@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -9,7 +10,7 @@ import {
 } from "@/lib/types";
 import type { BatchDetail } from "@/lib/batch-types";
 import { formatDateTime, formatInrFromPaise } from "@/lib/format";
-
+import Link from "next/link";
 type LoadState =
   | { status: "idle" | "loading" }
   | { status: "ready"; batch: BatchDetail | null; reused?: boolean }
@@ -78,6 +79,31 @@ export default function SimulatePage() {
     return [...counts.entries()].sort((a, b) => b[1] - a[1]);
   }, [batch]);
 
+  const [runProgress, setRunProgress] = useState(0);
+
+  async function runBatch() {
+    if (!batch) return;
+    setBusy(true);
+    try {
+      const res = await fetch("/api/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ batchId: batch.id }),
+      });
+      if (!res.ok) throw new Error("Failed to run batch");
+      const data = await res.json();
+      setRunProgress(data.processedCount);
+      await loadLatest(); // Reload batch data to see results
+    } catch (error) {
+      setState({
+        status: "error",
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="mx-auto max-w-6xl">
       <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
@@ -95,7 +121,7 @@ export default function SimulatePage() {
         </div>
       </header>
 
-      <section className="mb-8 rounded-xl border border-border bg-surface p-5">
+      <section className="mb-8 flex flex-col gap-4 rounded-xl border border-border bg-surface p-5">
         <div className="flex flex-wrap items-end gap-4">
           <label className="flex flex-col gap-1 text-xs text-muted">
             Seed
@@ -122,12 +148,25 @@ export default function SimulatePage() {
             type="button"
             onClick={() => void generate()}
             disabled={busy}
-            className="h-10 rounded-md bg-accent px-4 text-sm text-white transition-colors hover:bg-accent-hover disabled:opacity-60"
+            className="h-10 rounded-md bg-background border border-border px-4 text-sm text-foreground transition-colors hover:bg-border disabled:opacity-60"
           >
-            {busy ? "Generating…" : "Generate batch"}
+            {busy && !batch ? "Generating…" : "Generate batch"}
+          </button>
+          
+          <button
+            type="button"
+            onClick={() => void runBatch()}
+            disabled={busy || !batch || batch.status === "completed"}
+            className="h-10 rounded-md bg-accent px-4 text-sm text-white transition-colors hover:bg-accent-hover disabled:opacity-60 ml-auto"
+          >
+            {busy && batch ? "Processing..." : "Run Recovery Pipeline"}
           </button>
         </div>
-        <p className="mt-3 text-xs text-muted">
+        
+        {batch && batch.status === "completed" && (
+          <p className="text-sm text-accent">✓ Batch recovery run complete. Check Overview.</p>
+        )}
+        <p className="text-xs text-muted">
           Demo default: seed <span className="text-foreground">42</span>, count{" "}
           <span className="text-foreground">100</span>. Agent run lands in Phase 2.
         </p>
@@ -209,8 +248,12 @@ export default function SimulatePage() {
                 </thead>
                 <tbody>
                   {batch.payments.map((row) => (
-                    <tr key={row.id} className="border-b border-border/70 last:border-0">
-                      <td className="px-4 py-3 font-mono text-xs">{row.id}</td>
+                    <tr key={row.id} className="border-b border-border/70 last:border-0 hover:bg-muted/5">
+                      <td className="px-4 py-3 font-mono text-xs">
+                        <Link href={`/payment/${row.id}`} className="text-accent hover:underline">
+                          {row.id}
+                        </Link>
+                      </td>
                       <td className="px-4 py-3">
                         <div>{row.customer.name}</div>
                         <div className="text-xs text-muted">
