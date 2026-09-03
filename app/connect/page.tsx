@@ -1,303 +1,268 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  FAILURE_CATEGORY_LABELS,
-  SEGMENT_LABELS,
-  STRATEGY_LABELS,
-  type FailureCategory,
-} from "@/lib/types";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { BatchDetail } from "@/lib/batch-types";
-import { formatDateTime, formatInrFromPaise } from "@/lib/format";
-import Link from "next/link";
-type LoadState =
-  | { status: "idle" | "loading" }
-  | { status: "ready"; batch: BatchDetail | null; reused?: boolean }
-  | { status: "error"; message: string };
 
-export default function SimulatePage() {
-  const [seed, setSeed] = useState(42);
-  const [count, setCount] = useState(100);
-  const [state, setState] = useState<LoadState>({ status: "loading" });
-  const [busy, setBusy] = useState(false);
+type Step = {
+  label: string;
+  done: boolean;
+  active: boolean;
+};
 
-  const loadLatest = useCallback(async () => {
-    setState({ status: "loading" });
+type FlowState =
+  | "idle"
+  | "connecting"
+  | "analysing"
+  | "recovering"
+  | "done"
+  | "error";
+
+const PROVIDERS = [
+  { id: "razorpay", name: "Razorpay", icon: "💳" },
+  { id: "stripe", name: "Stripe", icon: "⚡" },
+  { id: "payu", name: "PayU", icon: "🏦" },
+];
+
+export default function ConnectPage() {
+  const router = useRouter();
+  const [flowState, setFlowState] = useState<FlowState>("idle");
+  const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
+  const [steps, setSteps] = useState<Step[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  async function startConnect(providerId: string) {
+    setSelectedProvider(providerId);
+    setFlowState("connecting");
+
+    const allSteps: Step[] = [
+      { label: "Authenticating with your payment provider", done: false, active: true },
+      { label: "Importing your transaction history", done: false, active: false },
+      { label: "Identifying failed payments", done: false, active: false },
+      { label: "Running recovery analysis", done: false, active: false },
+      { label: "Dashboard ready", done: false, active: false },
+    ];
+    setSteps(allSteps);
+
     try {
-      const res = await fetch("/api/batches");
-      if (!res.ok) throw new Error("Could not load batches.");
-      const data = (await res.json()) as { latest: BatchDetail | null };
-      setState({ status: "ready", batch: data.latest });
-    } catch (error) {
-      setState({
-        status: "error",
-        message: error instanceof Error ? error.message : "Unknown error",
-      });
-    }
-  }, []);
+      // Step 0: auth handshake (fake OAuth delay)
+      await delay(900);
+      markStep(0, true, 1);
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void loadLatest();
-  }, [loadLatest]);
+      // Step 1: import transactions
+      setFlowState("analysing");
+      await delay(700);
+      markStep(1, true, 2);
 
-  async function generate() {
-    setBusy(true);
-    try {
-      const res = await fetch("/api/simulate", {
+      // Step 2: identify failures
+      await delay(500);
+      markStep(2, true, 3);
+
+      // Step 3: run recovery analysis — actually call the API
+      setFlowState("recovering");
+      const batchRes = await fetch("/api/simulate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ seed, count }),
+        body: JSON.stringify({ seed: 42, count: 100 }),
       });
-      const data = (await res.json()) as {
-        batch?: BatchDetail;
-        error?: string;
-        reused?: boolean;
-      };
-      if (!res.ok || !data.batch) {
-        throw new Error(data.error ?? "Generation failed.");
+      const batchData = (await batchRes.json()) as { batch?: BatchDetail; error?: string };
+      if (!batchRes.ok || !batchData.batch) {
+        throw new Error(batchData.error ?? "Failed to load transactions.");
       }
-      setState({ status: "ready", batch: data.batch, reused: data.reused });
-    } catch (error) {
-      setState({
-        status: "error",
-        message: error instanceof Error ? error.message : "Unknown error",
-      });
-    } finally {
-      setBusy(false);
-    }
-  }
 
-  const batch = state.status === "ready" ? state.batch : null;
-  const categoryCounts = useMemo(() => {
-    if (!batch) return [];
-    const counts = new Map<FailureCategory, number>();
-    for (const row of batch.payments) {
-      counts.set(row.failure.category, (counts.get(row.failure.category) ?? 0) + 1);
-    }
-    return [...counts.entries()].sort((a, b) => b[1] - a[1]);
-  }, [batch]);
-
-  const [runProgress, setRunProgress] = useState(0);
-
-  async function runBatch() {
-    if (!batch) return;
-    setBusy(true);
-    try {
-      const res = await fetch("/api/run", {
+      // Run the recovery pipeline
+      const runRes = await fetch("/api/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ batchId: batch.id }),
+        body: JSON.stringify({ batchId: batchData.batch.id }),
       });
-      if (!res.ok) throw new Error("Failed to run batch");
-      const data = await res.json();
-      setRunProgress(data.processedCount);
-      await loadLatest(); // Reload batch data to see results
-    } catch (error) {
-      setState({
-        status: "error",
-        message: error instanceof Error ? error.message : "Unknown error",
-      });
-    } finally {
-      setBusy(false);
+      if (!runRes.ok) throw new Error("Recovery pipeline failed.");
+
+      markStep(3, true, 4);
+      await delay(400);
+
+      // Step 4: done
+      markStep(4, true, -1);
+      setFlowState("done");
+
+      await delay(800);
+      router.push("/overview");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong.");
+      setFlowState("error");
     }
   }
 
-  return (
-    <div className="mx-auto max-w-6xl">
-      <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-[11px] uppercase tracking-[0.18em] text-accent">
-            Phase 1 checkpoint
-          </p>
-          <h1 className="font-display mt-1 text-3xl italic tracking-tight">
-            Simulation Center
-          </h1>
-          <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted">
-            Seeded, deterministic failed payments. Same seed always produces the same
-            batch — safe to re-run live if a demo hiccups.
+  function markStep(idx: number, done: boolean, nextIdx: number) {
+    setSteps((prev) =>
+      prev.map((s, i) => ({
+        ...s,
+        done: i <= idx ? done : s.done,
+        active: i === nextIdx,
+      }))
+    );
+  }
+
+  function delay(ms: number) {
+    return new Promise<void>((r) => setTimeout(r, ms));
+  }
+
+  if (flowState === "idle") {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-4">
+        <div className="w-full max-w-md">
+          {/* Hero */}
+          <div className="mb-10 text-center">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-accent-muted mb-6">
+              <span className="text-3xl">⚡</span>
+            </div>
+            <h1 className="font-display text-4xl italic tracking-tight">
+              Recover AI
+            </h1>
+            <p className="mt-3 text-muted text-base leading-relaxed max-w-sm mx-auto">
+              Connect your payment account. We&apos;ll automatically find and
+              recover failed transactions.
+            </p>
+          </div>
+
+          {/* Provider cards */}
+          <div className="space-y-3">
+            <p className="text-xs uppercase tracking-[0.16em] text-muted mb-4">
+              Select your payment provider
+            </p>
+            {PROVIDERS.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => void startConnect(p.id)}
+                className="w-full flex items-center gap-4 rounded-xl border border-border bg-surface px-5 py-4 text-left transition-all hover:border-accent hover:shadow-sm active:scale-[0.98]"
+              >
+                <span className="text-2xl">{p.icon}</span>
+                <div className="flex-1">
+                  <p className="font-medium">{p.name}</p>
+                  <p className="text-xs text-muted mt-0.5">Authorise read-only access</p>
+                </div>
+                <span className="text-muted text-lg">→</span>
+              </button>
+            ))}
+          </div>
+
+          <p className="mt-6 text-center text-xs text-muted leading-relaxed">
+            Read-only access · No charges made · Demo environment
           </p>
         </div>
-      </header>
+      </div>
+    );
+  }
 
-      <section className="mb-8 flex flex-col gap-4 rounded-xl border border-border bg-surface p-5">
-        <div className="flex flex-wrap items-end gap-4">
-          <label className="flex flex-col gap-1 text-xs text-muted">
-            Seed
-            <input
-              type="number"
-              min={0}
-              value={seed}
-              onChange={(e) => setSeed(Number(e.target.value))}
-              className="h-10 w-28 rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-xs text-muted">
-            Payments (50–100)
-            <input
-              type="number"
-              min={50}
-              max={100}
-              value={count}
-              onChange={(e) => setCount(Number(e.target.value))}
-              className="h-10 w-32 rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
-            />
-          </label>
+  if (flowState === "error") {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-4">
+        <div className="w-full max-w-md text-center">
+          <div className="text-4xl mb-4">⚠️</div>
+          <h2 className="font-display text-2xl italic">Connection failed</h2>
+          <p className="mt-2 text-sm text-muted">{error}</p>
           <button
             type="button"
-            onClick={() => void generate()}
-            disabled={busy}
-            className="h-10 rounded-md bg-background border border-border px-4 text-sm text-foreground transition-colors hover:bg-border disabled:opacity-60"
-          >
-            {busy && !batch ? "Generating…" : "Generate batch"}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => void runBatch()}
-            disabled={busy || !batch || batch.status === "completed"}
-            className="h-10 rounded-md bg-accent px-4 text-sm text-white transition-colors hover:bg-accent-hover disabled:opacity-60 ml-auto"
-          >
-            {busy && batch ? "Processing..." : "Run Recovery Pipeline"}
-          </button>
-        </div>
-
-        {batch && batch.status === "completed" && (
-          <p className="text-sm text-accent">✓ Batch recovery run complete. Check Overview.</p>
-        )}
-        <p className="text-xs text-muted">
-          Demo default: seed <span className="text-foreground">42</span>, count{" "}
-          <span className="text-foreground">100</span>. Agent run lands in Phase 2.
-        </p>
-      </section>
-
-      {state.status === "loading" ? (
-        <p className="text-sm text-muted">Loading latest batch…</p>
-      ) : null}
-
-      {state.status === "error" ? (
-        <div className="rounded-xl border border-border bg-surface px-5 py-8">
-          <p className="text-sm text-foreground">{state.message}</p>
-          <button
-            type="button"
-            onClick={() => void loadLatest()}
-            className="mt-3 text-sm text-accent underline-offset-2 hover:underline"
+            onClick={() => {
+              setFlowState("idle");
+              setError(null);
+              setSteps([]);
+            }}
+            className="mt-6 rounded-md bg-accent px-6 py-2 text-sm text-white hover:bg-accent-hover transition-colors"
           >
             Try again
           </button>
         </div>
-      ) : null}
+      </div>
+    );
+  }
 
-      {state.status === "ready" && !batch ? (
-        <div className="rounded-xl border border-dashed border-border bg-surface px-5 py-16 text-center">
-          <p className="font-display text-xl italic">No batch yet</p>
-          <p className="mt-2 text-sm text-muted">
-            Generate 50–100 failed payments to inspect the dataset.
-          </p>
+  // Loading / progress state
+  const providerName = PROVIDERS.find((p) => p.id === selectedProvider)?.name ?? "your account";
+  const headings: Record<FlowState, string> = {
+    connecting: `Connecting to ${providerName}…`,
+    analysing: "Scanning your transactions…",
+    recovering: "Running recovery analysis…",
+    done: "Dashboard ready ✓",
+    idle: "",
+    error: "",
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center px-4">
+      <div className="w-full max-w-sm">
+        <div className="mb-8 text-center">
+          <div
+            className={`inline-flex items-center justify-center w-14 h-14 rounded-full mb-5 ${
+              flowState === "done"
+                ? "bg-green-100"
+                : "bg-accent-muted"
+            }`}
+          >
+            {flowState === "done" ? (
+              <span className="text-2xl">✓</span>
+            ) : (
+              <Spinner />
+            )}
+          </div>
+          <h2 className="font-display text-2xl italic">{headings[flowState]}</h2>
         </div>
-      ) : null}
 
-      {batch ? (
-        <>
-          <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-            <Stat label="Payments" value={String(batch.paymentCount)} />
-            <Stat
-              label="Value at risk"
-              value={formatInrFromPaise(batch.valueAtRiskPaise)}
-              hint="Sum of this batch, not a hardcoded figure"
-            />
-            <Stat label="Seed" value={String(batch.seed)} />
-            <Stat
-              label="Batch"
-              value={batch.id}
-              hint={
-                state.status === "ready" && state.reused
-                  ? "Reused existing seed (identical dataset)"
-                  : undefined
-              }
-            />
-          </div>
-
-          {categoryCounts.length > 0 ? (
-            <p className="mb-4 text-xs text-muted">
-              Failure mix:{" "}
-              {categoryCounts.map(([cat, n], i) => (
-                <span key={cat}>
-                  {i > 0 ? " · " : ""}
-                  {FAILURE_CATEGORY_LABELS[cat]} {n}
-                </span>
-              ))}
-            </p>
-          ) : null}
-
-          <div className="overflow-hidden rounded-xl border border-border bg-surface">
-            <div className="max-h-[640px] overflow-auto">
-              <table className="w-full min-w-[960px] text-left text-sm">
-                <thead className="sticky top-0 bg-surface text-[11px] uppercase tracking-[0.12em] text-muted">
-                  <tr className="border-b border-border">
-                    <th className="px-4 py-3 font-medium">Payment</th>
-                    <th className="px-4 py-3 font-medium">Customer</th>
-                    <th className="px-4 py-3 font-medium">Amount</th>
-                    <th className="px-4 py-3 font-medium">Failure</th>
-                    <th className="px-4 py-3 font-medium">Segment</th>
-                    <th className="px-4 py-3 font-medium">Retries</th>
-                    <th className="px-4 py-3 font-medium">Strategy</th>
-                    <th className="px-4 py-3 font-medium">Failed at</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {batch.payments.map((row) => (
-                    <tr key={row.id} className="border-b border-border/70 last:border-0 hover:bg-muted/5">
-                      <td className="px-4 py-3 font-mono text-xs">
-                        <Link href={`/payment/${row.id}`} className="text-accent hover:underline">
-                          {row.id}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div>{row.customer.name}</div>
-                        <div className="text-xs text-muted">
-                          {row.paymentMethod} · {row.bank}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">{formatInrFromPaise(row.amountPaise)}</td>
-                      <td className="px-4 py-3">
-                        {FAILURE_CATEGORY_LABELS[row.failure.category]}
-                      </td>
-                      <td className="px-4 py-3">{SEGMENT_LABELS[row.customer.segment]}</td>
-                      <td className="px-4 py-3">{row.retryCount}</td>
-                      <td className="px-4 py-3">
-                        {STRATEGY_LABELS[row.assignedStrategy]}
-                      </td>
-                      <td className="px-4 py-3 text-xs text-muted">
-                        {formatDateTime(row.failedAt)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        <div className="space-y-4">
+          {steps.map((step, i) => (
+            <div key={i} className="flex items-center gap-3">
+              <div
+                className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs border transition-all duration-300 ${
+                  step.done
+                    ? "bg-accent border-accent text-white"
+                    : step.active
+                    ? "border-accent border-2 bg-accent-muted"
+                    : "border-border bg-surface text-muted"
+                }`}
+              >
+                {step.done ? "✓" : i + 1}
+              </div>
+              <p
+                className={`text-sm transition-colors duration-200 ${
+                  step.done
+                    ? "text-foreground"
+                    : step.active
+                    ? "text-foreground"
+                    : "text-muted"
+                }`}
+              >
+                {step.label}
+              </p>
             </div>
-          </div>
-        </>
-      ) : null}
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
 
-function Stat({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-}) {
+function Spinner() {
   return (
-    <div className="rounded-xl border border-border bg-surface px-4 py-3">
-      <p className="text-[11px] uppercase tracking-[0.14em] text-muted">{label}</p>
-      <p className="mt-1 truncate font-display text-xl italic">{value}</p>
-      {hint ? <p className="mt-1 text-[11px] text-muted">{hint}</p> : null}
-    </div>
+    <svg
+      className="animate-spin h-5 w-5 text-accent"
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      viewBox="0 0 24 24"
+    >
+      <circle
+        className="opacity-25"
+        cx="12"
+        cy="12"
+        r="10"
+        stroke="currentColor"
+        strokeWidth="4"
+      />
+      <path
+        className="opacity-75"
+        fill="currentColor"
+        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+      />
+    </svg>
   );
 }

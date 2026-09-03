@@ -4,19 +4,24 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const NAV = [
-  { href: "/simulate", label: "Simulation Center", ready: true },
-  { href: "/overview", label: "Overview", ready: true },
+  { href: "/overview", label: "Dashboard", ready: true },
+  { href: "/simulate", label: "All Payments", ready: true },
   { href: "/strategy-lab", label: "Strategy Lab", ready: true },
-  { href: "/agent", label: "Agent Verification", ready: true },
+  { href: "/agent", label: "Agent Audit", ready: true },
 ] as const;
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
+  // Hide sidebar on the connect/landing page
+  if (pathname === "/connect" || pathname === "/") {
+    return <>{children}</>;
+  }
+
   return (
     <div className="flex min-h-screen">
       <aside className="flex w-60 shrink-0 flex-col border-r border-border bg-surface px-5 py-8">
-        <Link href="/simulate" className="mb-10">
+        <Link href="/overview" className="mb-10">
           <p className="font-display text-xl tracking-tight text-foreground italic">
             Recover AI
           </p>
@@ -26,21 +31,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </Link>
         <nav className="flex flex-col gap-1">
           {NAV.map((item) => {
-            const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+            const active =
+              pathname === item.href || pathname.startsWith(`${item.href}/`);
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`rounded-md px-3 py-2 text-sm transition-colors ${active
+                className={`rounded-md px-3 py-2 text-sm transition-colors ${
+                  active
                     ? "bg-accent-muted text-accent"
                     : "text-muted hover:bg-background hover:text-foreground"
-                  }`}
+                }`}
               >
                 <span className="flex items-center justify-between gap-2">
                   {item.label}
                   {!item.ready ? (
                     <span className="text-[10px] uppercase tracking-wider text-muted/70">
-                      Later
+                      Soon
                     </span>
                   ) : null}
                 </span>
@@ -49,8 +56,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
         <p className="mt-auto text-[11px] leading-relaxed text-muted">
-          Razorpay test mode only. Simulation executor is the demo path until the agent
-          run is wired in Phase 2.
+          Connected to Razorpay · Test mode
         </p>
       </aside>
       <main className="min-w-0 flex-1 px-10 py-8">{children}</main>
