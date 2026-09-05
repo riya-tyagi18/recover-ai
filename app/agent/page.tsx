@@ -18,6 +18,8 @@ function plainAction(action: string) {
   return PLAIN_ACTIONS[action] ?? action;
 }
 
+export const dynamic = "force-dynamic";
+
 export default async function AuditLogPage() {
   const store = await readStore();
 

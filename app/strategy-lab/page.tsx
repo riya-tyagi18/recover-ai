@@ -4,6 +4,8 @@ import { formatInrFromPaise } from "@/lib/format";
 import { STRATEGY_LABELS } from "@/lib/types";
 import Link from "next/link";
 
+export const dynamic = "force-dynamic";
+
 export default async function StrategyLabPage() {
   const batch = await getLatestBatch();
 
