@@ -1,5 +1,6 @@
 import { promises as fs } from "fs";
 import path from "path";
+import os from "os";
 import type {
   AbExperiment,
   AgentRun,
@@ -26,7 +27,8 @@ export type StoreData = {
   auditLogs: AuditLog[];
 };
 
-const DATA_DIR = path.join(process.cwd(), ".data");
+const isVercel = process.env.VERCEL === "1" || !!process.env.VERCEL_URL;
+const DATA_DIR = isVercel ? path.join(os.tmpdir(), "recover-ai-data") : path.join(process.cwd(), ".data");
 const DATA_PATH = path.join(DATA_DIR, "store.json");
 
 function emptyStore(): StoreData {

@@ -38,8 +38,11 @@ export default function AllPaymentsPage() {
     setState({ status: "loading" });
     try {
       const res = await fetch("/api/batches");
-      if (!res.ok) throw new Error("Could not load payments.");
-      const data = (await res.json()) as { latest: BatchDetail | null };
+      let data: { latest: BatchDetail | null } = { latest: null };
+      if (res.headers.get("content-type")?.includes("application/json")) {
+        data = await res.json();
+      }
+      if (!res.ok) throw new Error(`Could not load payments (${res.status}).`);
       setState({ status: "ready", batch: data.latest });
     } catch (error) {
       setState({
@@ -63,7 +66,11 @@ export default function AllPaymentsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ batchId: batch.id }),
       });
-      if (!res.ok) throw new Error("Recovery pipeline failed.");
+      let runData: { error?: string } = {};
+      if (res.headers.get("content-type")?.includes("application/json")) {
+        runData = await res.json();
+      }
+      if (!res.ok) throw new Error(runData.error ?? `Recovery pipeline failed (${res.status}).`);
       await loadLatest();
     } catch (error) {
       setState({
