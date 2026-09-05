@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { BatchDetail } from "@/lib/batch-types";
 
@@ -19,9 +19,9 @@ type FlowState =
   | "error";
 
 const PROVIDERS = [
-  { id: "razorpay", name: "Razorpay", icon: "💳" },
-  { id: "stripe", name: "Stripe", icon: "⚡" },
-  { id: "payu", name: "PayU", icon: "🏦" },
+  { id: "razorpay", name: "Razorpay", abbr: "RZ" },
+  { id: "stripe", name: "Stripe", abbr: "ST" },
+  { id: "payu", name: "PayU", abbr: "PU" },
 ];
 
 export default function ConnectPage() {
@@ -114,7 +114,7 @@ export default function ConnectPage() {
           {/* Hero */}
           <div className="mb-10 text-center">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-accent-muted mb-6">
-              <span className="text-3xl">⚡</span>
+              <span className="font-display text-2xl italic text-accent">R</span>
             </div>
             <h1 className="font-display text-4xl italic tracking-tight">
               Recover AI
@@ -137,7 +137,7 @@ export default function ConnectPage() {
                 onClick={() => void startConnect(p.id)}
                 className="w-full flex items-center gap-4 rounded-xl border border-border bg-surface px-5 py-4 text-left transition-all hover:border-accent hover:shadow-sm active:scale-[0.98]"
               >
-                <span className="text-2xl">{p.icon}</span>
+                <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-accent-muted text-[11px] font-bold tracking-wider text-accent">{p.abbr}</span>
                 <div className="flex-1">
                   <p className="font-medium">{p.name}</p>
                   <p className="text-xs text-muted mt-0.5">Authorise read-only access</p>
@@ -148,7 +148,7 @@ export default function ConnectPage() {
           </div>
 
           <p className="mt-6 text-center text-xs text-muted leading-relaxed">
-            Read-only access · No charges made · Demo environment
+            Read-only access · No charges made
           </p>
         </div>
       </div>

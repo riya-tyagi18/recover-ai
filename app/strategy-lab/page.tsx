@@ -12,8 +12,8 @@ export default async function StrategyLabPage() {
       <div className="mx-auto max-w-6xl">
         <h1 className="font-display mb-8 text-3xl italic tracking-tight">Strategy Lab</h1>
         <div className="rounded-xl border border-dashed border-border bg-surface px-5 py-16 text-center">
-          <p className="font-display text-xl italic">No batch data available</p>
-          <p className="mt-2 text-sm text-muted">Generate and run a batch in the Simulation Center first.</p>
+          <p className="font-display text-xl italic">No data yet</p>
+          <p className="mt-2 text-sm text-muted">Connect your payment account to start recovering failed transactions.</p>
         </div>
       </div>
     );
@@ -27,9 +27,8 @@ export default async function StrategyLabPage() {
   return (
     <div className="mx-auto max-w-6xl space-y-8">
       <header>
-        <p className="text-[11px] uppercase tracking-[0.18em] text-accent">Phase 2 Experiments</p>
-        <h1 className="font-display mt-1 text-3xl italic tracking-tight">Strategy Lab</h1>
-        <p className="mt-2 text-sm text-muted">A/B Strategy performance and assignments.</p>
+        <h1 className="font-display text-3xl italic tracking-tight">Strategy Lab</h1>
+        <p className="mt-2 text-sm text-muted">Recovery strategy performance across all assigned approaches.</p>
       </header>
 
       <div className="overflow-hidden rounded-xl border border-border bg-surface">
@@ -73,7 +72,7 @@ export default async function StrategyLabPage() {
       
       <div className="flex justify-end">
         <Link href="/simulate" className="text-sm text-accent hover:underline">
-          Go to Simulation Center to view individual payments →
+          View individual payments →
         </Link>
       </div>
     </div>

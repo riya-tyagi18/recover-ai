@@ -219,7 +219,7 @@ export default function AllPaymentsPage() {
                       <td className="px-4 py-3">{SEGMENT_LABELS[row.customer.segment]}</td>
                       <td className="px-4 py-3">
                         <span
-                          className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium border ${STATUS_COLORS[row.status] ?? "text-muted border-border bg-background"}`}
+                          className={`inline-flex px-2 py-0.5 rounded text-[11px] font-medium border ${STATUS_COLORS[row.status] ?? "text-muted border-border bg-background"}`}
                         >
                           {STATUS_LABELS[row.status] ?? row.status}
                         </span>

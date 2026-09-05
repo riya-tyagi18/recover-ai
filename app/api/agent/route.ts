@@ -1,22 +1,32 @@
 import { NextResponse } from "next/server";
+import { runAgent } from "@/lib/agent/process";
+
+const AGENT_URL = process.env.AGENT_URL ?? "http://127.0.0.1:8000";
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    
-    // Call Python agent
-    const response = await fetch("http://localhost:8000/process", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      return NextResponse.json({ error: "Agent API error", details: errorText }, { status: response.status });
+
+    // Try configured Python agent first; fall back to in-process TS agent
+    let data: unknown = null;
+    try {
+      const response = await fetch(`${AGENT_URL}/process`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(3000),
+      });
+      if (response.ok) {
+        data = await response.json();
+      }
+    } catch {
+      // Python backend unavailable — using in-process agent
     }
-    
-    const data = await response.json();
+
+    if (!data) {
+      data = runAgent(body.payment, body.customer, body.failure);
+    }
+
     return NextResponse.json(data);
   } catch (error) {
     console.error("Agent proxy error:", error);

@@ -55,9 +55,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
-        <p className="mt-auto text-[11px] leading-relaxed text-muted">
-          Connected to Razorpay · Test mode
-        </p>
+        <nav className="mt-auto flex flex-col gap-1">
+          <a href="/privacy" className="text-[11px] text-muted hover:text-foreground transition-colors">Privacy Policy</a>
+          <a href="/terms" className="text-[11px] text-muted hover:text-foreground transition-colors">Terms &amp; Conditions</a>
+        </nav>
       </aside>
       <main className="min-w-0 flex-1 px-10 py-8">{children}</main>
     </div>

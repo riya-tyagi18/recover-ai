@@ -155,7 +155,7 @@ export default async function PaymentDetailPage({
           <div className="rounded-xl border border-border bg-surface p-6">
             <h3 className="font-display text-xl italic mb-4">Status</h3>
             <span
-              className={`inline-flex px-3 py-1 rounded-full text-[11px] font-medium uppercase tracking-wider border ${statusColor[payment.status] ?? "text-muted border-border"}`}
+              className={`inline-flex px-3 py-1 rounded text-[11px] font-medium uppercase tracking-wider border ${statusColor[payment.status] ?? "text-muted border-border"}`}
             >
               {statusLabel[payment.status] ?? payment.status}
             </span>

@@ -102,32 +102,32 @@ export default async function OverviewPage() {
         <h2 className="font-display text-2xl italic">What we&apos;re recovering</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <CaseCard
-            icon="🔄"
+            tag="Retry"
             title="Failed payment retry"
-            desc="Auto-retries timed to the highest-probability window for each failure type."
+            desc="Retries timed to the highest-probability recovery window for each failure type."
           />
           <CaseCard
-            icon="🛒"
+            tag="Checkout"
             title="Checkout drop-off"
             desc="Detects abandoned checkouts and sends a timely nudge to complete payment."
           />
           <CaseCard
-            icon="📅"
+            tag="Subscription"
             title="Subscription billing"
             desc="Recovers failed recurring charges before the subscription lapses."
           />
           <CaseCard
-            icon="🏢"
+            tag="B2B"
             title="B2B receivables"
             desc="Follows up on overdue invoices with escalating, compliance-safe reminders."
           />
           <CaseCard
-            icon="🔁"
+            tag="Mandate"
             title="Mandate retry"
             desc="Re-presents NACH/UPI autopay mandates after temporary bank errors."
           />
           <CaseCard
-            icon="🤝"
+            tag="Promise"
             title="Promise-to-pay"
             desc="Tracks payment promises and sends gentle Hinglish nudges at the right moment."
           />
@@ -201,18 +201,18 @@ function FunnelStep({
 }
 
 function CaseCard({
-  icon,
+  tag,
   title,
   desc,
 }: {
-  icon: string;
+  tag: string;
   title: string;
   desc: string;
 }) {
   return (
     <div className="rounded-xl border border-border bg-surface p-5">
-      <span className="text-2xl">{icon}</span>
-      <p className="mt-3 font-medium text-sm">{title}</p>
+      <p className="text-[10px] uppercase tracking-[0.16em] text-accent font-medium">{tag}</p>
+      <p className="mt-2 font-medium text-sm">{title}</p>
       <p className="mt-1 text-xs text-muted leading-relaxed">{desc}</p>
     </div>
   );
