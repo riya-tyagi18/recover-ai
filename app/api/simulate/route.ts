@@ -22,6 +22,14 @@ export async function POST(request: Request) {
     );
   }
 
-  const result = await createOrReuseBatch(parsed.data.seed, parsed.data.count);
-  return Response.json(result);
+  try {
+    const result = await createOrReuseBatch(parsed.data.seed, parsed.data.count);
+    return Response.json(result);
+  } catch (error: any) {
+    console.error("Simulate error:", error);
+    return Response.json(
+      { error: error.message || "Internal server error" },
+      { status: 500 }
+    );
+  }
 }

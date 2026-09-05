@@ -65,9 +65,13 @@ export default function ConnectPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ seed: 42, count: 100 }),
       });
-      const batchData = (await batchRes.json()) as { batch?: BatchDetail; error?: string };
+      
+      let batchData: { batch?: BatchDetail; error?: string } = {};
+      if (batchRes.headers.get("content-type")?.includes("application/json")) {
+        batchData = await batchRes.json();
+      }
       if (!batchRes.ok || !batchData.batch) {
-        throw new Error(batchData.error ?? "Failed to load transactions.");
+        throw new Error(batchData.error ?? `Failed to load transactions (${batchRes.status}).`);
       }
 
       // Run the recovery pipeline
@@ -76,7 +80,14 @@ export default function ConnectPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ batchId: batchData.batch.id }),
       });
-      if (!runRes.ok) throw new Error("Recovery pipeline failed.");
+      
+      let runData: { error?: string } = {};
+      if (runRes.headers.get("content-type")?.includes("application/json")) {
+        runData = await runRes.json();
+      }
+      if (!runRes.ok) {
+        throw new Error(runData.error ?? `Recovery pipeline failed (${runRes.status}).`);
+      }
 
       markStep(3, true, 4);
       await delay(400);
