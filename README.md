@@ -2,7 +2,6 @@
 
 **An AI agent that finds revenue at risk from failed payments, works out why it failed, picks the right recovery action, and shows how much money it got back.**
 
-Built for the Razorpay hiring hackathon, Track 3: AI Revenue Recovery.
 
 **Live demo:** https://recover-ai-sooty.vercel.app/login
 **Demo login:** username `host`, password `password`
@@ -93,7 +92,7 @@ npm run build
 
 ## Roadmap
 
-- Live Razorpay Test Mode webhook ingestion for `payment.failed` events
+- Live Test Mode webhook ingestion for `payment.failed` events
 - Real payment-account connection and production authentication
 - Checkout abandonment, B2B overdue receivables and promise-to-pay workflows
 - Sandbox integrations for WhatsApp and email
