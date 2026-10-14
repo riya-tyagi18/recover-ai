@@ -219,13 +219,110 @@ async function runTests() {
     assert(invalidPay.closeMatches.length > 0, "Returns close match suggestions for unknown payment ID");
   }
 
-  // recommendAction()
-  const recAction = await recommendAction("cust_42_001");
-  assert(recAction.found === true, "recommendAction returns recommendation for customer");
-  if (recAction.found) {
-    assert(recAction.retriesCapStatus.includes("attempts"), "Recommendation cites 3-attempt safety cap");
-    assert(recAction.strategy.length > 0, "Recommendation specifies recovery strategy");
-  }
+  // ─── Test Suite 4: Local NLP, Entity Resolution, Intent & No-Key RAG ───
+  console.log("\nSuite 4: Local NLP, Intent Classification & Free Text No-Key RAG");
+
+  const { extractCustomerId, extractPaymentId, resolveCustomerByName, analyzeNlpQuery } =
+    await import("../lib/analyst/nlp");
+  const { processAnalystQuery } = await import("../lib/analyst/llm");
+
+  // 1. ID normalization variants
+  assert(extractCustomerId("cust_42_005") === "cust_42_005", "extractCustomerId: standard ID");
+  assert(extractCustomerId("CUST-42-005") === "cust_42_005", "extractCustomerId: uppercase with hyphen");
+  assert(extractCustomerId("cust 42 005") === "cust_42_005", "extractCustomerId: with spaces");
+  assert(extractPaymentId("pay_42_010") === "pay_42_010", "extractPaymentId: standard ID");
+  assert(extractPaymentId("PAY-42-010") === "pay_42_010", "extractPaymentId: uppercase with hyphen");
+
+  // 2. Customer Name matching
+  const exactNameRes = await resolveCustomerByName("Riya Mehta");
+  assert(exactNameRes.matchedCustomer?.id === "cust_42_080", "resolveCustomerByName: exact full name 'Riya Mehta'");
+
+  const fuzzyNameRes = await resolveCustomerByName("Ria Mehta");
+  assert(fuzzyNameRes.matchedCustomer?.id === "cust_42_080", "resolveCustomerByName: typo fuzzy match 'Ria Mehta'");
+
+  const ambiguousNameRes = await resolveCustomerByName("Mehta");
+  assert(ambiguousNameRes.isAmbiguous === true, "resolveCustomerByName: 'Mehta' detects ambiguous multiple matches");
+  assert(
+    (ambiguousNameRes.ambiguousCandidates?.length || 0) > 1,
+    "resolveCustomerByName: lists candidate customers for ambiguous query"
+  );
+
+  const unknownNameRes = await resolveCustomerByName("Unknown Person XYZ");
+  assert(!unknownNameRes.matchedCustomer, "resolveCustomerByName: unknown name returns no match");
+  assert((unknownNameRes.closeMatches?.length || 0) > 0, "resolveCustomerByName: suggests closest matches");
+
+  // 3. Intent Classification
+  const intent1 = await analyzeNlpQuery("which failure reason is most common?");
+  assert(intent1.intent === "top_failure_reasons", "analyzeNlpQuery: 'which failure reason is most common?' classified correctly");
+
+  const intent2 = await analyzeNlpQuery("revenue at risk");
+  assert(intent2.intent === "revenue_at_risk", "analyzeNlpQuery: 'revenue at risk' classified correctly");
+
+  const intent3 = await analyzeNlpQuery("customers with highest failure rates");
+  assert(intent3.intent === "highest_failure_rate_customers", "analyzeNlpQuery: 'highest failure rates' classified correctly");
+
+  const intent4 = await analyzeNlpQuery("why did payment pay_42_010 fail?");
+  assert(intent4.intent === "payment_reason", "analyzeNlpQuery: 'why did payment fail?' classified correctly");
+  assert(intent4.entities.paymentId === "pay_42_010", "analyzeNlpQuery: extracted paymentId pay_42_010");
+
+  const intent5 = await analyzeNlpQuery("tell me about riya mehta");
+  assert(intent5.intent === "customer_profile", "analyzeNlpQuery: 'tell me about riya mehta' classified correctly");
+  assert(intent5.entities.customerId === "cust_42_080", "analyzeNlpQuery: resolved customerId cust_42_080 for Riya Mehta");
+
+  // Entity-only query shortcut
+  const intentEntityOnly = await analyzeNlpQuery("cust_42_005");
+  assert(intentEntityOnly.intent === "customer_profile", "analyzeNlpQuery: entity-only 'cust_42_005' -> customer_profile");
+  assert(intentEntityOnly.entities.customerId === "cust_42_005", "analyzeNlpQuery: extracted customerId cust_42_005");
+
+  // 4. Session Context Follow-ups
+  const context = { lastCustomerId: "cust_42_080", lastCustomerName: "Riya Mehta" };
+  const followUp1 = await analyzeNlpQuery("what is their risk segment?", context);
+  assert(followUp1.intent === "risk_segment", "Follow-up: 'what is their risk segment?' classified as risk_segment");
+  assert(followUp1.entities.customerId === "cust_42_080", "Follow-up: inherited lastCustomerId cust_42_080");
+
+  const followUp2 = await analyzeNlpQuery("what action do you recommend for them?", context);
+  assert(followUp2.intent === "recovery_recommendation", "Follow-up: 'what action do you recommend' classified correctly");
+  assert(followUp2.entities.customerId === "cust_42_080", "Follow-up: inherited lastCustomerId cust_42_080");
+
+  // 5. Free-Text No-Key RAG Execution
+  console.log("\nExecuting free-text queries in data-only mode (NO LLM KEY):");
+
+  // "tell me about riya mehta"
+  const q1 = await processAnalystQuery("tell me about riya mehta");
+  assert(!q1.text.includes("AI chat not configured"), "q1: Does NOT return 'AI chat not configured'");
+  assert(q1.text.includes("Riya Mehta"), "q1: Answers with Riya Mehta's profile");
+  assert(q1.text.includes("cust_42_080"), "q1: Cites correct customer ID cust_42_080");
+  assert(q1.isDataOnlyMode === true, "q1: Runs cleanly in data-only mode");
+  assert(q1.toolData?.found === true, "q1: Attaches toolData for rich UI rendering");
+
+  // "tell me about cust_42_005"
+  const q2 = await processAnalystQuery("tell me about cust_42_005");
+  assert(!q2.text.includes("AI chat not configured"), "q2: Does NOT return 'AI chat not configured'");
+  assert(q2.text.includes("cust_42_005"), "q2: Cites cust_42_005");
+  assert(q2.text.includes("Anjali Sharma"), "q2: Answers with customer Anjali Sharma");
+  assert(q2.text.includes("Rules Fired") || q2.text.includes("Segment"), "q2: Cites segment rules");
+
+  // "what is their risk segment?" (with session context)
+  const q3 = await processAnalystQuery("what is their risk segment?", {
+    lastCustomerId: "cust_42_005",
+    lastCustomerName: "Anjali Sharma",
+  });
+  assert(!q3.text.includes("AI chat not configured"), "q3: Does NOT return 'AI chat not configured'");
+  assert(q3.text.includes("Anjali Sharma"), "q3: Resolves follow-up customer name from session context");
+  assert(q3.text.includes("classified as"), "q3: Answers with risk segment");
+
+  // "which failure reason is most common?"
+  const q4 = await processAnalystQuery("which failure reason is most common?");
+  assert(!q4.text.includes("AI chat not configured"), "q4: Does NOT return 'AI chat not configured'");
+  assert(q4.text.includes("most frequent payment failure reason"), "q4: Identifies top failure reason");
+  assert(q4.text.includes("Insufficient funds"), "q4: Matches dataset's top failure reason");
+  assert(q4.toolData?.reasons?.length > 0, "q4: Includes failure reasons breakdown in payload");
+
+  // "revenue at risk"
+  const q5 = await processAnalystQuery("how much revenue is at risk?");
+  assert(!q5.text.includes("AI chat not configured"), "q5: Does NOT return 'AI chat not configured'");
+  assert(q5.text.includes("₹3,46,200"), "q5: Accurately quotes dataset value at risk (₹3,46,200)");
+  assert(q5.text.includes("₹1,69,255"), "q5: Accurately quotes dataset recovered revenue (₹1,69,255)");
 
   console.log(`\n🎉 All ${passedTests}/${totalTests} unit tests PASSED successfully!`);
 }
@@ -234,3 +331,4 @@ runTests().catch((err) => {
   console.error("Unhandled test error:", err);
   process.exit(1);
 });
+

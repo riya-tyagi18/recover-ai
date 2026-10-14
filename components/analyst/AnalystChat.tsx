@@ -6,19 +6,17 @@ import { SegmentCards } from "./SegmentCards";
 import { CustomerDetailCard } from "./CustomerDetailCard";
 import { formatInrFromPaise } from "@/lib/format";
 import type { CustomerSegmentationResult } from "@/lib/analyst/segmentation";
-import type {
-  SegmentSummary,
-  ScatterPlotPoint,
-} from "@/lib/analyst/engine";
+import type { SessionContext } from "@/lib/analyst/nlp";
 
 type ChatMessage = {
   id: string;
   sender: "user" | "analyst";
   text: string;
   timestamp: string;
-  isNotice?: boolean;
+  isDataOnlyMode?: boolean;
   toolName?: string;
   toolData?: any;
+  clarificationOptions?: { label: string; query: string }[];
 };
 
 const SUGGESTIONS = [
@@ -33,8 +31,8 @@ export function AnalystChat() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sessionContext, setSessionContext] = useState<SessionContext>({});
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
-  const [selectedCustomerDetail, setSelectedCustomerDetail] = useState<CustomerSegmentationResult | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -48,7 +46,6 @@ export function AnalystChat() {
 
   // Load initial welcome or default segment view on first mount
   useEffect(() => {
-    // Automatically trigger Customer Risk Analysis to seed the view with rich data
     handleAction("customer_risk", "Show initial customer risk overview");
   }, []);
 
@@ -79,6 +76,7 @@ export function AnalystChat() {
           message: action ? undefined : queryText,
           action,
           customerId: custId,
+          sessionContext,
         }),
       });
 
@@ -95,15 +93,24 @@ export function AnalystChat() {
 
       const data = await res.json();
 
+      // Update session context if returned by server
+      if (data.updatedContext) {
+        setSessionContext((prev) => ({ ...prev, ...data.updatedContext }));
+        if (data.updatedContext.lastCustomerId) {
+          setSelectedCustomerId(data.updatedContext.lastCustomerId);
+        }
+      }
+
       const analystMsgId = `analyst_${Date.now()}`;
       const analystMessage: ChatMessage = {
         id: analystMsgId,
         sender: "analyst",
         text: data.text || "Here are the findings based on the current dataset.",
         timestamp: new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }),
-        isNotice: !data.isConfigured,
+        isDataOnlyMode: data.isDataOnlyMode,
         toolName: data.toolName,
         toolData: data.toolData,
+        clarificationOptions: data.clarificationOptions,
       };
 
       setMessages((prev) => [...prev, analystMessage]);
@@ -128,7 +135,8 @@ export function AnalystChat() {
 
   async function handleSelectCustomer(customerId: string) {
     setSelectedCustomerId(customerId);
-    // Fetch detailed diagnostic for this customer
+    setSessionContext((prev) => ({ ...prev, lastCustomerId: customerId }));
+
     try {
       const res = await fetch("/api/analyst", {
         method: "POST",
@@ -139,22 +147,25 @@ export function AnalystChat() {
         body: JSON.stringify({
           action: "customer_detail",
           customerId,
+          sessionContext: { ...sessionContext, lastCustomerId: customerId },
         }),
       });
 
       if (res.ok) {
         const json = await res.json();
         if (json.toolData && json.toolData.found) {
-          setSelectedCustomerDetail(json.toolData.customer);
-          // Also append customer analysis to message stream
+          if (json.updatedContext) {
+            setSessionContext((prev) => ({ ...prev, ...json.updatedContext }));
+          }
           const msgId = `cust_analysis_${Date.now()}`;
           setMessages((prev) => [
             ...prev,
             {
               id: msgId,
               sender: "analyst",
-              text: `Detailed diagnostic analysis for customer **${json.toolData.customer.customer.customerName}** (${customerId}):`,
+              text: `Detailed diagnostic analysis for **${json.toolData.customer.customer.customerName}** (\`${customerId}\`):`,
               timestamp: new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }),
+              isDataOnlyMode: true,
               toolName: "getCustomer",
               toolData: json.toolData,
             },
@@ -180,11 +191,19 @@ export function AnalystChat() {
                 Payment Recovery Analyst
               </h2>
               <p className="text-[11px] text-muted">
-                Autonomous dataset interpreter · Grounded in live metrics
+                Local NLP &amp; Deterministic Engine · Free text &amp; automated diagnostics
               </p>
             </div>
           </div>
-          <span className="badge-recovered text-[10px]">Deterministic Engine Active</span>
+
+          <div className="flex items-center gap-2">
+            {sessionContext.lastCustomerId && (
+              <span className="badge-pending text-[10px] hidden sm:inline-flex">
+                Active Context: <strong className="font-mono ml-1">{sessionContext.lastCustomerId}</strong>
+              </span>
+            )}
+            <span className="badge-recovered text-[10px]">Deterministic Engine Active</span>
+          </div>
         </div>
 
         {/* Suggestion action buttons */}
@@ -214,7 +233,7 @@ export function AnalystChat() {
               Ask the Recovery Analyst
             </h3>
             <p className="text-xs leading-relaxed">
-              Query failed payments, top failure reasons, revenue at risk, or inspect specific customer accounts and recovery actions.
+              Ask questions about any customer (e.g. &ldquo;tell me about riya mehta&rdquo; or &ldquo;cust_42_005&rdquo;), risk segments, payment failure causes, or revenue at risk.
             </p>
           </div>
         )}
@@ -229,6 +248,11 @@ export function AnalystChat() {
               <span>{msg.sender === "user" ? "You" : "Recovery Analyst"}</span>
               <span>·</span>
               <span>{msg.timestamp}</span>
+              {msg.isDataOnlyMode && (
+                <span className="text-[9px] text-muted border border-border px-1.5 py-0.2 rounded bg-surface-subtle">
+                  Running in data-only mode
+                </span>
+              )}
             </div>
 
             {/* Bubble */}
@@ -236,19 +260,25 @@ export function AnalystChat() {
               className={`max-w-3xl rounded-xl p-4 text-xs leading-relaxed space-y-3 ${
                 msg.sender === "user"
                   ? "bg-accent text-white"
-                  : msg.isNotice
-                  ? "bg-amber-50/70 border border-amber-200/80 text-foreground"
                   : "card border-border bg-surface text-foreground shadow-sm"
               }`}
             >
               {/* Plain English explanation */}
               <div className="whitespace-pre-wrap">{msg.text}</div>
 
-              {/* Notice banner for missing key */}
-              {msg.isNotice && (
-                <div className="pt-2 border-t border-amber-200/60 text-[11px] text-amber-900 font-medium flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
-                  Free typing uses conversational AI. Suggestion buttons run directly on live data.
+              {/* Clarification Chips if multiple matches or ambiguous intent */}
+              {msg.clarificationOptions && msg.clarificationOptions.length > 0 && (
+                <div className="pt-2 border-t border-border-subtle flex flex-wrap gap-1.5">
+                  {msg.clarificationOptions.map((opt) => (
+                    <button
+                      key={opt.label}
+                      type="button"
+                      onClick={() => sendQuery(opt.query)}
+                      className="px-2.5 py-1 rounded-md border border-accent/40 bg-accent-muted/30 hover:bg-accent hover:text-white text-accent font-medium text-[11px] transition-colors"
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
                 </div>
               )}
 
@@ -262,7 +292,7 @@ export function AnalystChat() {
         {loading && (
           <div className="flex items-center gap-2 text-xs text-muted p-2">
             <span className="w-2 h-2 rounded-full bg-accent animate-ping" />
-            <span>Analyzing dataset and running verification rules…</span>
+            <span>Retrieving records and executing analysis…</span>
           </div>
         )}
 
@@ -282,7 +312,7 @@ export function AnalystChat() {
           <input
             id="analyst-chat-input"
             type="text"
-            placeholder="Ask about a customer (cust_42_005), payment (pay_42_010), failure reasons, or revenue at risk…"
+            placeholder="Ask about a customer ('tell me about riya mehta'), risk segment, failure reasons, or revenue at risk…"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             disabled={loading}
@@ -342,7 +372,7 @@ function renderToolPayload(
     return (
       <div className="pt-2 border-t border-border-subtle space-y-2">
         <p className="text-xs text-amber-800 font-medium">
-          Query &quot;{data.query}&quot; was not found in the dataset. Did you mean one of these?
+          Query was not found in the dataset. Did you mean one of these accounts?
         </p>
         <div className="flex flex-wrap gap-2">
           {data.closeMatches.map((match: { id: string; name?: string }) => (

@@ -565,3 +565,35 @@ export async function recommendAction(customerId: string): Promise<
     retriesCapStatus,
   };
 }
+
+export async function executeDeterministicTool(
+  name: string,
+  args: Record<string, unknown>
+): Promise<unknown> {
+  switch (name) {
+    case "getCustomer":
+      return await getCustomer(String(args.customerId || ""));
+    case "getPayment":
+      return await getPayment(String(args.paymentId || ""));
+    case "topFailureReasons":
+      return await topFailureReasons();
+    case "revenueAtRisk":
+      return await revenueAtRisk();
+    case "customerRanking":
+      return await customerRanking(
+        (args.criterion as "failure_rate" | "value_at_risk" | "recovery_potential") || "failure_rate"
+      );
+    case "segmentCustomers":
+      return await segmentCustomers();
+    case "recommendAction":
+      return await recommendAction(String(args.customerId || ""));
+    case "unanswerable":
+      return {
+        unanswerable: true,
+        reason: String(args.reason || "Question cannot be answered from the payment recovery dataset."),
+      };
+    default:
+      throw new Error(`Unauthorized tool call: ${name}`);
+  }
+}
+

@@ -4,7 +4,7 @@ import { processAnalystQuery, executeDeterministicTool, type AnalystToolName } f
 import { getCustomer } from "@/lib/analyst/engine";
 
 // ─── In-Memory Rate Limiting ──────────────────────────────────────────
-// 30 requests per minute per IP / client
+// 40 requests per minute per IP / client
 type RateLimitRecord = { count: number; resetAt: number };
 const rateLimitMap = new Map<string, RateLimitRecord>();
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
@@ -41,6 +41,13 @@ const RequestSchema = z.object({
     .optional(),
   customerId: z.string().optional(),
   paymentId: z.string().optional(),
+  sessionContext: z
+    .object({
+      lastCustomerId: z.string().optional(),
+      lastCustomerName: z.string().optional(),
+      lastPaymentId: z.string().optional(),
+    })
+    .optional(),
 });
 
 export async function POST(request: Request) {
@@ -63,7 +70,7 @@ export async function POST(request: Request) {
       request.headers.get("x-real-ip") ||
       "anonymous-client";
 
-    const { allowed, remaining } = checkRateLimit(clientIp);
+    const { allowed } = checkRateLimit(clientIp);
     if (!allowed) {
       return NextResponse.json(
         { error: "Rate limit exceeded. Please wait a minute before sending more queries." },
@@ -81,13 +88,14 @@ export async function POST(request: Request) {
       );
     }
 
-    const { message, action, customerId } = parsed.data;
+    const { message, action, customerId, sessionContext } = parsed.data;
 
     // ─── Direct Suggestion Button Handling (Direct deterministic execution) ───
     if (action) {
       let toolName: AnalystToolName;
       let toolData: unknown;
       let title = "";
+      const updatedContext = { ...sessionContext };
 
       switch (action) {
         case "customer_risk":
@@ -117,6 +125,10 @@ export async function POST(request: Request) {
           toolName = "getCustomer";
           toolData = await getCustomer(customerId);
           title = `Customer Analysis: ${customerId}`;
+          if (toolData && (toolData as any).found) {
+            updatedContext.lastCustomerId = (toolData as any).customer.customer.customerId;
+            updatedContext.lastCustomerName = (toolData as any).customer.customer.customerName;
+          }
           break;
         default:
           return NextResponse.json({ error: "Unknown action" }, { status: 400 });
@@ -124,18 +136,27 @@ export async function POST(request: Request) {
 
       return NextResponse.json({
         isConfigured: true,
+        isDataOnlyMode: true,
         text: `Here is the current ${title} computed from the live dataset:`,
         toolName,
         toolData,
+        updatedContext,
       });
     }
 
-    // ─── Free-Text Message Handling (via LLM with tool calling) ─────────
+    // ─── Free-Text Message Handling (via Local NLP + RAG) ──────────────
     if (!message || !message.trim()) {
       return NextResponse.json({ error: "Message cannot be empty." }, { status: 400 });
     }
 
-    const response = await processAnalystQuery(message);
+    if (message.length > 1000) {
+      return NextResponse.json(
+        { error: "Message is too long (limit: 1000 characters). Please enter a more focused question." },
+        { status: 400 }
+      );
+    }
+
+    const response = await processAnalystQuery(message, sessionContext);
     return NextResponse.json(response);
   } catch (error) {
     console.error("Analyst API error:", error);
