@@ -9,21 +9,14 @@ export const dynamic = "force-dynamic";
 export default async function OverviewPage() {
   const batch = await getLatestBatch();
 
+  // Store auto-seeds, so batch will always be present after first request
   if (!batch) {
     return (
       <div className="mx-auto max-w-6xl">
         <h1 className="font-display mb-8 text-3xl italic tracking-tight">Dashboard</h1>
         <div className="rounded-xl border border-dashed border-border bg-surface px-5 py-16 text-center">
-          <p className="font-display text-xl italic">No data yet</p>
-          <p className="mt-2 text-sm text-muted">
-            Connect your payment account to start recovering failed transactions.
-          </p>
-          <Link
-            href="/connect"
-            className="mt-4 inline-block rounded-md bg-accent px-5 py-2 text-sm text-white hover:bg-accent-hover transition-colors"
-          >
-            Connect payments
-          </Link>
+          <p className="font-display text-xl italic">Loading sample data…</p>
+          <p className="mt-2 text-sm text-muted">Refresh in a moment — seeding synthetic payments.</p>
         </div>
       </div>
     );
@@ -37,7 +30,7 @@ export default async function OverviewPage() {
         <div>
           <h1 className="font-display text-3xl italic tracking-tight">Dashboard</h1>
           <p className="mt-2 text-sm text-muted">
-            Recovery results across your connected account.
+            Recovery results — <span className="text-amber-600 font-medium">sample data</span>, modelled on real Razorpay failure codes. Not real merchant data.
           </p>
         </div>
         <Link

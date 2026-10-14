@@ -1,7 +1,17 @@
-import { readStore } from "@/lib/db/store";
-import { formatDateTime, formatInrFromPaise } from "@/lib/format";
+"use client";
+
+import { useEffect, useState, useMemo } from "react";
 import { FAILURE_CATEGORY_LABELS } from "@/lib/types";
+import { formatDateTime, formatInrFromPaise } from "@/lib/format";
+import type { AuditLog, Payment, Customer, FailureEvent } from "@/lib/types";
 import Link from "next/link";
+
+type RowData = {
+  log: AuditLog;
+  payment?: Payment;
+  customer?: Customer;
+  failure?: FailureEvent;
+};
 
 const PLAIN_ACTIONS: Record<string, string> = {
   diagnosed: "Analysed the failure",
@@ -18,44 +28,75 @@ function plainAction(action: string) {
   return PLAIN_ACTIONS[action] ?? action;
 }
 
-export const dynamic = "force-dynamic";
+export default function ActivityLogPage() {
+  const [rows, setRows] = useState<RowData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState("");
 
-export default async function AuditLogPage() {
-  const store = await readStore();
+  useEffect(() => {
+    async function load() {
+      try {
+        const res = await fetch("/api/activity-log");
+        if (!res.ok) throw new Error("failed");
+        const data = await res.json() as { rows: RowData[] };
+        setRows(data.rows);
+      } catch {
+        setRows([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+    void load();
+  }, []);
 
-  // Show payment-level audit logs (exclude batch-level)
-  const logs = store.auditLogs
-    .filter((l) => l.paymentId !== null)
-    .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
-    .slice(0, 200);
-
-  const paymentMap = new Map(store.payments.map((p) => [p.id, p]));
-  const customerMap = new Map(store.customers.map((c) => [c.id, c]));
-  const failureMap = new Map(store.failureEvents.map((f) => [f.paymentId, f]));
+  const filtered = useMemo(() => {
+    if (!query.trim()) return rows;
+    const q = query.toLowerCase();
+    return rows.filter((r) =>
+      r.customer?.name?.toLowerCase().includes(q) ||
+      r.log.action.toLowerCase().includes(q) ||
+      r.log.reason.toLowerCase().includes(q) ||
+      r.failure?.category.toLowerCase().includes(q) ||
+      r.log.paymentId?.toLowerCase().includes(q)
+    );
+  }, [rows, query]);
 
   return (
     <div className="mx-auto max-w-6xl space-y-8">
       <header>
-        <h1 className="font-display text-3xl italic tracking-tight">Agent Audit</h1>
+        <h1 className="font-display text-3xl italic tracking-tight">Activity Log</h1>
         <p className="mt-2 text-sm text-muted">
-          Every decision the recovery agent made, in plain language.
+          Per-payment timeline of what the agent did and why — diagnosis, action, retry count, stop reason.
         </p>
+        <p className="mt-1 text-xs text-amber-600">Sample data — not real merchant data.</p>
       </header>
 
-      {logs.length === 0 ? (
+      {/* Search */}
+      <div>
+        <input
+          id="activity-search"
+          type="search"
+          placeholder="Search by customer, action, failure type or payment ID…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="w-full max-w-md rounded-xl border border-border bg-surface px-4 py-2.5 text-sm text-foreground placeholder:text-muted outline-none focus:border-accent transition-colors"
+        />
+      </div>
+
+      {loading && <p className="text-sm text-muted">Loading activity…</p>}
+
+      {!loading && filtered.length === 0 && (
         <div className="rounded-xl border border-dashed border-border bg-surface px-5 py-16 text-center">
-          <p className="font-display text-xl italic">No activity yet</p>
-          <p className="mt-2 text-sm text-muted">
-            Connect your payment account to start recovery.
+          <p className="font-display text-xl italic">
+            {query ? "No results for that search" : "No activity yet"}
           </p>
-          <Link
-            href="/connect"
-            className="mt-4 inline-block rounded-md bg-accent px-5 py-2 text-sm text-white hover:bg-accent-hover transition-colors"
-          >
-            Connect payments
-          </Link>
+          <p className="mt-2 text-sm text-muted">
+            {query ? "Try a different term." : "Data is being seeded — refresh in a moment."}
+          </p>
         </div>
-      ) : (
+      )}
+
+      {!loading && filtered.length > 0 && (
         <div className="overflow-hidden rounded-xl border border-border bg-surface">
           <table className="w-full text-left text-sm">
             <thead className="bg-surface text-[11px] uppercase tracking-[0.12em] text-muted">
@@ -69,42 +110,39 @@ export default async function AuditLogPage() {
               </tr>
             </thead>
             <tbody>
-              {logs.map((log) => {
-                const payment = paymentMap.get(log.paymentId ?? "");
-                const customer = payment ? customerMap.get(payment.customerId) : null;
-                const failure = payment ? failureMap.get(payment.id) : null;
-                return (
-                  <tr key={log.id} className="border-b border-border/70 last:border-0 hover:bg-muted/5">
-                    <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">
-                      {formatDateTime(log.at)}
-                    </td>
-                    <td className="px-4 py-3">
-                      {log.paymentId ? (
-                        <Link
-                          href={`/payment/${log.paymentId}`}
-                          className="text-accent hover:underline font-medium"
-                        >
-                          {customer?.name ?? log.paymentId}
-                        </Link>
-                      ) : (
-                        <span className="text-muted">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-sm">
-                      {payment ? formatInrFromPaise(payment.amountPaise) : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-muted">
-                      {failure ? FAILURE_CATEGORY_LABELS[failure.category] : "—"}
-                    </td>
-                    <td className="px-4 py-3 font-medium text-sm">
-                      {plainAction(log.action)}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-muted max-w-xs truncate">
-                      {log.reason}
-                    </td>
-                  </tr>
-                );
-              })}
+              {filtered.map((r) => (
+                <tr key={r.log.id} className="border-b border-border/70 last:border-0 hover:bg-muted/5">
+                  <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">
+                    {formatDateTime(r.log.at)}
+                  </td>
+                  <td className="px-4 py-3">
+                    {r.log.paymentId ? (
+                      <Link
+                        href={`/payment/${r.log.paymentId}`}
+                        className="text-accent hover:underline font-medium"
+                      >
+                        {r.customer?.name ?? r.log.paymentId}
+                      </Link>
+                    ) : (
+                      <span className="text-muted">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-sm">
+                    {r.payment ? formatInrFromPaise(r.payment.amountPaise) : "—"}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-muted">
+                    {r.failure
+                      ? FAILURE_CATEGORY_LABELS[r.failure.category as keyof typeof FAILURE_CATEGORY_LABELS]
+                      : "—"}
+                  </td>
+                  <td className="px-4 py-3 font-medium text-sm">
+                    {plainAction(r.log.action)}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-muted max-w-xs truncate">
+                    {r.log.reason}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

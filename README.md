@@ -2,7 +2,47 @@
 
 Autonomous payment recovery agent for the Razorpay Hackathon (Track 3: AI Revenue Recovery). Detect → diagnose → decide → execute, with ₹ recovered computed from batch data.
 
-**Current checkpoint: Phase 2** — Full Batch Recovery, Analytics Dashboard, Strategy Lab, and end-to-end Agent Decision flow.
+> **⚠️ Sample data notice**
+> All payment data shown in this app is **100% synthetic** and modelled on real Razorpay failure codes.
+> It is NOT real merchant data. It is generated deterministically with seed 42 and auto-loaded on first boot.
+
+## Demo login
+
+| Username | Password |
+|---|---|
+| `host` | `password` |
+
+## Quick start
+
+```bash
+npm install
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000). You will be redirected to the login page. Sign in with the demo credentials above.
+
+The app auto-seeds 100 synthetic payments on first boot — no manual steps required.
+
+## Navigation
+
+- **Dashboard** — KPI cards, recovery funnel, failure reasons, strategy performance
+- **All Payments** — full table of 100 sample payments with status
+- **Strategy Comparison** — bar chart + table of recovery rate per strategy with plain-English explanation
+- **Activity Log** — searchable per-payment timeline of agent decisions (diagnosis, action, retry count, stop reason)
+- **Settings (sidebar)** — "Connect payment account" card labelled _Coming soon_ (Razorpay/Stripe/PayU)
+
+## Data model
+
+Amounts are integer **paise**. Dashboard ₹ recovered is `sum(recovered_amount_paise) / 100` dynamically computed in `lib/analytics.ts`.
+
+## Where retries stop
+
+`lib/stopping.ts` and `services/agent/stopping.py` — `MAX_AUTOMATED_ATTEMPTS = 3`.
+
+## Contact
+
+riyatyag06@gmail.com
+
 
 ## Run (Phase 2)
 

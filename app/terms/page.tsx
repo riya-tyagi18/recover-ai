@@ -56,8 +56,8 @@ export default function TermsPage() {
         <h2 className="font-display text-xl italic">Contact</h2>
         <p>
           For questions about these terms, contact us at{" "}
-          <a href="mailto:legal@recover.ai" className="text-accent hover:underline">
-            legal@recover.ai
+          <a href="mailto:riyatyag06@gmail.com" className="text-accent hover:underline">
+            riyatyag06@gmail.com
           </a>
           .
         </p>

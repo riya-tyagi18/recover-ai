@@ -141,16 +141,10 @@ export default function AllPaymentsPage() {
 
       {state.status === "ready" && !batch && (
         <div className="rounded-xl border border-dashed border-border bg-surface px-5 py-16 text-center">
-          <p className="font-display text-xl italic">No payments loaded</p>
+          <p className="font-display text-xl italic">Loading sample data…</p>
           <p className="mt-2 text-sm text-muted">
-            Connect your payment account to get started.
+            Seeding synthetic payments — refresh in a moment.
           </p>
-          <Link
-            href="/connect"
-            className="mt-4 inline-block rounded-md bg-accent px-5 py-2 text-sm text-white hover:bg-accent-hover transition-colors"
-          >
-            Connect payments
-          </Link>
         </div>
       )}
 
