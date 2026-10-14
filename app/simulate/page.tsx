@@ -17,11 +17,11 @@ type LoadState =
   | { status: "ready"; batch: BatchDetail | null }
   | { status: "error"; message: string };
 
-const STATUS_COLORS: Record<string, string> = {
-  recovered: "text-green-700 bg-green-50 border-green-200",
-  stopped: "text-red-700 bg-red-50 border-red-200",
-  recovering: "text-amber-700 bg-amber-50 border-amber-200",
-  failed: "text-muted bg-background border-border",
+const STATUS_BADGE_CLASSES: Record<string, string> = {
+  recovered: "badge-recovered",
+  stopped: "badge-stopped",
+  recovering: "badge-at-risk",
+  failed: "badge-pending",
 };
 const STATUS_LABELS: Record<string, string> = {
   recovered: "Recovered",
@@ -97,9 +97,12 @@ export default function AllPaymentsPage() {
     <div className="mx-auto max-w-6xl">
       <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-3xl italic tracking-tight">All Payments</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="font-display text-3xl italic tracking-tight text-foreground">All Payments</h1>
+            <span className="badge-at-risk">Sample data</span>
+          </div>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted">
-            Every failed payment we found, and what the recovery agent did about it.
+            Every failed payment modelled in this batch, with end-to-end recovery audit trails.
           </p>
         </div>
         {batch && batch.status !== "completed" && (
@@ -220,7 +223,7 @@ export default function AllPaymentsPage() {
                       <td className="px-4 py-3">{SEGMENT_LABELS[row.customer.segment]}</td>
                       <td className="px-4 py-3">
                         <span
-                          className={`inline-flex px-2 py-0.5 rounded text-[11px] font-medium border ${STATUS_COLORS[row.status] ?? "text-muted border-border bg-background"}`}
+                          className={STATUS_BADGE_CLASSES[row.status] ?? "badge-pending"}
                         >
                           {STATUS_LABELS[row.status] ?? row.status}
                         </span>

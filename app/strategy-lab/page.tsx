@@ -34,26 +34,28 @@ export default async function StrategyComparisonPage() {
   return (
     <div className="mx-auto max-w-6xl space-y-8">
       <header>
-        <h1 className="font-display text-3xl italic tracking-tight">Strategy Comparison</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="font-display text-3xl italic tracking-tight text-foreground">Strategy Comparison</h1>
+          <span className="badge-at-risk">Sample data</span>
+        </div>
         <p className="mt-2 text-sm text-muted max-w-2xl">
           {bestLabel
             ? `Across ${batch.paymentCount} sample payments, "${bestLabel}" achieved the highest recovery rate (${best![1].recoveryRate.toFixed(1)}%). Each strategy is assigned evenly, so results reflect natural variation in payment failure types.`
-            : "Recovery strategy performance across all assigned approaches. Sample data — not real merchant data."}
+            : "Recovery strategy performance across all assigned approaches. Synthetic data for demonstration."}
         </p>
-        <p className="mt-1 text-xs text-amber-600">Sample data — not real merchant data.</p>
       </header>
 
-      {/* Bar chart visual (CSS-based, no external chart needed for simple bars) */}
-      <div className="rounded-xl border border-border bg-surface p-6 space-y-4">
-        <h2 className="font-display text-lg italic">Recovery rate by strategy</h2>
-        <div className="space-y-3">
+      {/* Bar chart visual */}
+      <div className="card p-6 space-y-4">
+        <h2 className="font-display text-lg italic text-foreground">Recovery rate by strategy</h2>
+        <div className="space-y-3.5">
           {strategies.map(([strategy, stats]) => {
             const label = STRATEGY_LABELS[strategy as keyof typeof STRATEGY_LABELS] || strategy;
             return (
               <div key={strategy} className="space-y-1">
-                <div className="flex justify-between text-sm">
-                  <span className="font-medium">{label}</span>
-                  <span className="text-muted">{stats.recoveryRate.toFixed(1)}%</span>
+                <div className="flex justify-between text-xs sm:text-sm">
+                  <span className="font-medium text-foreground">{label}</span>
+                  <span className="text-muted font-medium">{stats.recoveryRate.toFixed(1)}%</span>
                 </div>
                 <div className="h-2 w-full bg-border rounded-full overflow-hidden">
                   <div
@@ -68,8 +70,9 @@ export default async function StrategyComparisonPage() {
       </div>
 
       {/* Table */}
-      <div className="overflow-hidden rounded-xl border border-border bg-surface">
-        <table className="w-full text-left text-sm">
+      <div className="card overflow-hidden">
+        <div className="table-container">
+          <table className="w-full text-left text-sm min-w-[600px]">
           <thead className="bg-surface text-[11px] uppercase tracking-[0.12em] text-muted">
             <tr className="border-b border-border">
               <th className="px-4 py-3 font-medium">Strategy</th>
@@ -105,6 +108,7 @@ export default async function StrategyComparisonPage() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       <div className="flex justify-end">

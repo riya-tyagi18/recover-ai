@@ -21,9 +21,9 @@ function plainAction(action: string) {
 }
 
 function plainOutcome(outcome: string) {
-  if (outcome === "success") return "✓ Payment recovered";
-  if (outcome === "failed") return "✗ Attempt failed";
-  if (outcome === "skipped") return "→ Escalated to manual review";
+  if (outcome === "success") return "Payment recovered";
+  if (outcome === "failed") return "Attempt failed";
+  if (outcome === "skipped") return "Escalated to manual review";
   return outcome;
 }
 
@@ -50,14 +50,14 @@ export default async function PaymentDetailPage({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const execLog = logs.find(l => l.action === "action_executed");
 
-  const statusColor: Record<string, string> = {
-    recovered: "text-green-700 bg-green-50 border-green-200",
-    stopped: "text-red-700 bg-red-50 border-red-200",
-    recovering: "text-amber-700 bg-amber-50 border-amber-200",
-    failed: "text-muted bg-background border-border",
+  const statusBadgeClass: Record<string, string> = {
+    recovered: "badge-recovered",
+    stopped: "badge-stopped",
+    recovering: "badge-at-risk",
+    failed: "badge-pending",
   };
   const statusLabel: Record<string, string> = {
-    recovered: "Recovered ✓",
+    recovered: "Recovered",
     stopped: "Stopped",
     recovering: "In progress",
     failed: "Failed",
@@ -155,7 +155,7 @@ export default async function PaymentDetailPage({
           <div className="rounded-xl border border-border bg-surface p-6">
             <h3 className="font-display text-xl italic mb-4">Status</h3>
             <span
-              className={`inline-flex px-3 py-1 rounded text-[11px] font-medium uppercase tracking-wider border ${statusColor[payment.status] ?? "text-muted border-border"}`}
+              className={statusBadgeClass[payment.status] ?? "badge-pending"}
             >
               {statusLabel[payment.status] ?? payment.status}
             </span>

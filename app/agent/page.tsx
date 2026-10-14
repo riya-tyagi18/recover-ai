@@ -64,11 +64,13 @@ export default function ActivityLogPage() {
   return (
     <div className="mx-auto max-w-6xl space-y-8">
       <header>
-        <h1 className="font-display text-3xl italic tracking-tight">Activity Log</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="font-display text-3xl italic tracking-tight text-foreground">Activity Log</h1>
+          <span className="badge-at-risk">Sample data</span>
+        </div>
         <p className="mt-2 text-sm text-muted">
           Per-payment timeline of what the agent did and why — diagnosis, action, retry count, stop reason.
         </p>
-        <p className="mt-1 text-xs text-amber-600">Sample data — not real merchant data.</p>
       </header>
 
       {/* Search */}
@@ -86,8 +88,8 @@ export default function ActivityLogPage() {
       {loading && <p className="text-sm text-muted">Loading activity…</p>}
 
       {!loading && filtered.length === 0 && (
-        <div className="rounded-xl border border-dashed border-border bg-surface px-5 py-16 text-center">
-          <p className="font-display text-xl italic">
+        <div className="card p-12 text-center">
+          <p className="font-display text-xl italic text-foreground">
             {query ? "No results for that search" : "No activity yet"}
           </p>
           <p className="mt-2 text-sm text-muted">
@@ -97,8 +99,9 @@ export default function ActivityLogPage() {
       )}
 
       {!loading && filtered.length > 0 && (
-        <div className="overflow-hidden rounded-xl border border-border bg-surface">
-          <table className="w-full text-left text-sm">
+        <div className="card overflow-hidden">
+          <div className="table-container">
+            <table className="w-full text-left text-sm min-w-[760px]">
             <thead className="bg-surface text-[11px] uppercase tracking-[0.12em] text-muted">
               <tr className="border-b border-border">
                 <th className="px-4 py-3 font-medium">Time</th>
@@ -145,6 +148,7 @@ export default function ActivityLogPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>

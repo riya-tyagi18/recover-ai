@@ -170,8 +170,12 @@ export default function ConnectPage() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-4">
         <div className="w-full max-w-md text-center">
-          <div className="text-4xl mb-4">⚠️</div>
-          <h2 className="font-display text-2xl italic">Connection failed</h2>
+          <div className="mx-auto w-12 h-12 rounded-lg bg-amber-50 border border-amber-200/60 flex items-center justify-center mb-4 text-[#b45309]">
+            <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 9v4m0 4h.01M21 19a2 2 0 0 1-1.73 1H4.73A2 2 0 0 1 3 19a2 2 0 0 1 .27-1L10.27 4a2 2 0 0 1 3.46 0l7 14a2 2 0 0 1 .27 1z"/>
+            </svg>
+          </div>
+          <h2 className="font-display text-2xl italic text-foreground">Connection failed</h2>
           <p className="mt-2 text-sm text-muted">{error}</p>
           <button
             type="button"
