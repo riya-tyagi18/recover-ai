@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "check-seed": "npx tsx scripts/check-seed.ts",
+    "test": "npx tsx scripts/test-analyst.ts",
     "agent": "cd services/agent && uvicorn main:app --reload --port 8000"
   },
   "dependencies": {

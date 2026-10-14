@@ -10,6 +10,7 @@ const NAV = [
   { href: "/simulate",      label: "All Payments" },
   { href: "/strategy-lab",  label: "Strategy Comparison" },
   { href: "/agent",         label: "Activity Log" },
+  { href: "/analyst",       label: "Recovery Analyst" },
 ] as const;
 
 const NO_SHELL = ["/", "/login", "/connect"];
