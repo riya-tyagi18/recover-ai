@@ -1,99 +1,107 @@
 # Recover AI
 
-Autonomous payment recovery agent for the Razorpay Hackathon (Track 3: AI Revenue Recovery). Detect → diagnose → decide → execute, with ₹ recovered computed from batch data.
+**An AI agent that finds revenue at risk from failed payments, works out why it failed, picks the right recovery action, and shows how much money it got back.**
 
-> **⚠️ Sample data notice**
-> All payment data shown in this app is **100% synthetic** and modelled on real Razorpay failure codes.
-> It is NOT real merchant data. It is generated deterministically with seed 42 and auto-loaded on first boot.
+Built for the Razorpay hiring hackathon, Track 3: AI Revenue Recovery.
 
-## Demo login
+**Live demo:** https://recover-ai-sooty.vercel.app/login
+**Demo login:** username `host`, password `password`
 
-| Username | Password |
-|---|---|
-| `host` | `password` |
+---
 
-## Quick start
+## The problem
+
+Businesses lose money quietly. A card expires, a bank has a temporary outage, a customer runs short of funds, and a subscription payment fails. Most teams find out late, retry blindly, or never follow up. Retrying too aggressively annoys customers and can breach contact rules.
+
+## What Recover AI does
+
+For every failed payment, the agent works through the same loop:
+
+**Detect > Diagnose > Decide > Execute > Measure**
+
+1. **Detect** the failed payment and the revenue at risk.
+2. **Diagnose** the cause: temporary bank issue, insufficient funds, expired card, permanent decline, and so on.
+3. **Decide** the best action for that customer: retry now, retry later, send a nudge, ask for a new payment method, or stop.
+4. **Execute** the action within strict limits.
+5. **Measure** the result as real rupees recovered, computed from the data.
+
+Every decision is explained in plain language and recorded in an audit trail.
+
+## Features
+
+- **Dashboard analytics:** KPIs for failed payments, value at risk, amount recovered and recovery rate, plus donut and line/area charts for failure reasons, recovery over time and more. All figures are calculated from the dataset.
+- **All Payments:** searchable list of every failed payment with status, failure type and value at risk.
+- **Strategy Comparison:** compares recovery strategies by recovery rate and amount recovered, so you can see what works best.
+- **Activity Log:** a per-payment timeline of what the agent did and why, including the reason it stopped.
+- **Payment Recovery Analyst chatbot:** ask questions in plain English, such as "tell me about CUST_42_005" or "which failure reason costs the most?". It understands customer IDs and names, retrieves the relevant records from the dataset, and answers only from that data. It uses an LLM when an API key is configured and falls back to data-only answers when it is not. One-click buttons cover Customer Risk Analysis, Top Failure Reasons, Revenue at Risk and Recovery Recommendations.
+- **Customer risk segmentation:** each customer is classified as High Value, Recovery on Retry, High Failure Frequency, High Risk or Healthy, using transparent rules. The response lists which rules triggered, and an interactive scatter chart plus segment cards let you explore customers.
+- **Hinglish nudges:** short, polite recovery messages for payment failures. Delivery is simulated and no real customer is ever contacted.
+
+## Safety and compliance by design
+
+- **3-attempt stopping rule:** the agent never retries endlessly. After three automated attempts it stops and shows the reason.
+- **Bounded escalation:** contact attempts are limited and visible.
+- **Full audit trail:** every action is logged with what happened, why, and what comes next.
+- **Test mode only:** no real payments, no real money, and no card numbers or CVVs are stored.
+
+## About the data
+
+The payments in this project are **synthetic sample data**, modelled on real Razorpay failure categories. Real merchant data is confidential, so the sample set lets the recovery logic be measured and demonstrated safely. All dashboard numbers are computed from this dataset. The app labels it as sample data, and no figure here represents real merchant revenue.
+
+## Tech stack
+
+- Next.js and React frontend
+- PostgreSQL
+- LangGraph for the agent workflow
+- Razorpay Test Mode (no production credentials)
+- Deployed on Vercel
+
+## Run locally
 
 ```bash
+git clone https://github.com/riya-tyagi18/recover-ai.git
+cd recover-ai
 npm install
+cp .env.example .env.local   # then fill in values
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). You will be redirected to the login page. Sign in with the demo credentials above.
+Open http://localhost:3000 and sign in with `host` / `password`.
 
-The app auto-seeds 100 synthetic payments on first boot — no manual steps required.
+### Environment variables
 
-## Navigation
+Secrets live in environment variables and are never committed or exposed to the browser.
 
-- **Dashboard** — KPI cards, recovery funnel, failure reasons, strategy performance
-- **All Payments** — full table of 100 sample payments with status
-- **Strategy Comparison** — bar chart + table of recovery rate per strategy with plain-English explanation
-- **Activity Log** — searchable per-payment timeline of agent decisions (diagnosis, action, retry count, stop reason)
-- **Settings (sidebar)** — "Connect payment account" card labelled _Coming soon_ (Razorpay/Stripe/PayU)
+| Variable | Required | Purpose |
+|---|---|---|
+| `GROQ_API_KEY`, `OPENAI_API_KEY` or `GEMINI_API_KEY` | Optional | Enables LLM-written chatbot answers. Without one, the chatbot answers from the data directly. |
 
-## Data model
+See `.env.example` for the full list.
 
-Amounts are integer **paise**. Dashboard ₹ recovered is `sum(recovered_amount_paise) / 100` dynamically computed in `lib/analytics.ts`.
+### Build
 
-## Where retries stop
+```bash
+npm run build
+```
 
-`lib/stopping.ts` and `services/agent/stopping.py` — `MAX_AUTOMATED_ATTEMPTS = 3`.
+## Known limitations
+
+- Connecting a real payment account (Razorpay, Stripe or PayU) is shown as "coming soon". The app runs on sample data.
+- The login is a demo account for evaluation, not production authentication.
+- Message delivery (WhatsApp and email) is simulated.
+- Forecasts and recovery figures reflect the sample dataset, not live business performance.
+
+## Roadmap
+
+- Live Razorpay Test Mode webhook ingestion for `payment.failed` events
+- Real payment-account connection and production authentication
+- Checkout abandonment, B2B overdue receivables and promise-to-pay workflows
+- Sandbox integrations for WhatsApp and email
 
 ## Contact
 
-riyatyag06@gmail.com
+[YOUR_EMAIL]
 
+## License
 
-## Run (Phase 2)
-
-```bash
-npm install
-cp .env.example .env
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000). It redirects to **Simulation Center**.
-
-1. Seed `42`, count `100`
-2. Click **Generate batch**
-3. Click **Run Recovery Pipeline** to autonomously process all payments via the LangGraph backend.
-4. Navigate to the **Overview**, **Strategy Lab**, and **Payment Details** to see real computed analytics and audit trails.
-
-No Postgres or Razorpay keys are required for this checkpoint. Data is stored in `.data/store.json` (gitignored).
-
-### Python Agent Backend (Required for Run)
-
-```bash
-cd services/agent
-python -m venv .venv
-# Windows: .venv\Scripts\activate
-# Mac/Linux: source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
-```
-
-`GET http://127.0.0.1:8000/health` — LangGraph nodes process each payment synchronously.
-
-## Env vars
-
-See `.env.example`. For Phase 2 they can stay empty except `RECOVER_AI_ENV=simulation`.
-
-| Variable | Purpose |
-|---|---|
-| `DATABASE_URL` | Postgres/Supabase (out of scope for simulation) |
-| `AGENT_URL` | Python agent (`http://127.0.0.1:8000`) |
-| `LLM_PROVIDER` | `mock` (deterministic simulation default) |
-| `RAZORPAY_KEY_ID` / `SECRET` | Test mode only (out of scope for simulation) |
-
-## Where the money figure will come from
-
-Amounts are integer **paise**. Dashboard ₹ recovered is `sum(recovered_amount_paise) / 100` dynamically computed in `lib/analytics.ts` from the post-agent store data.
-
-## Where retries stop
-
-`lib/stopping.ts` and `services/agent/stopping.py` — `MAX_AUTOMATED_ATTEMPTS = 3`. The agent fully computes and executes this stopping rule.
-
-## Known limitations (Phase 2)
-
-- File store (`store.json`), not Postgres yet.
-- Razorpay Test Mode is not wired into the UI to prevent demo failures; runs in pure simulation.
+[Add a license, or remove this section]
