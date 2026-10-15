@@ -49,6 +49,7 @@ export type Customer = {
   paymentMethod: PaymentMethod;
   bank: string;
   createdAt: string;
+  userId?: string | null;
 };
 
 export type Payment = {
@@ -69,6 +70,69 @@ export type Payment = {
   subscriptionValuePaise: number;
   failedAt: string;
   assignedStrategy: StrategyId;
+  userId?: string | null;
+};
+
+export type UserRole = "user" | "owner";
+
+export type User = {
+  id: string;
+  name: string;
+  email: string;
+  passwordHash: string;
+  role: UserRole;
+  createdAt: string;
+  emailVerified: boolean;
+  failedAttempts: number;
+  lockedUntil: string | null;
+  customerId?: string | null;
+  otpSecret?: string | null;
+  otpEnabled?: boolean;
+};
+
+export type Session = {
+  id: string; // SHA-256 hash of random session token
+  userId: string;
+  createdAt: string;
+  expiresAt: string;
+  lastActiveAt: string;
+  userAgent?: string | null;
+  ipAddress?: string | null;
+};
+
+export type RateLimitRecord = {
+  key: string;
+  count: number;
+  resetAt: string;
+  createdAt: string;
+};
+
+export type PasswordResetToken = {
+  id: string; // SHA-256 hash of reset token
+  userId: string;
+  expiresAt: string;
+  used: boolean;
+  createdAt: string;
+};
+
+export type EmailOtp = {
+  id: string;
+  userId: string;
+  codeHash: string;
+  expiresAt: string;
+  attempts: number;
+  used: boolean;
+  createdAt: string;
+};
+
+export type AuthAuditLog = {
+  id: string;
+  userId: string | null;
+  event: string;
+  ip: string | null;
+  userAgent: string | null;
+  detail: unknown;
+  createdAt: string;
 };
 
 export type FailureEvent = {

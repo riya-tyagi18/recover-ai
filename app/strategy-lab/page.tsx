@@ -2,11 +2,17 @@ import { getLatestBatch } from "@/lib/db/batches";
 import { getBatchAnalytics } from "@/lib/analytics";
 import { formatInrFromPaise } from "@/lib/format";
 import { STRATEGY_LABELS } from "@/lib/types";
+import { redirect } from "next/navigation";
+import { validateSession } from "@/lib/auth/session";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
 export default async function StrategyComparisonPage() {
+  const sessionResult = await validateSession();
+  if (!sessionResult) redirect("/login");
+  if (sessionResult.user.role !== "owner") redirect("/customer/dashboard");
+
   const batch = await getLatestBatch();
 
   if (!batch) {

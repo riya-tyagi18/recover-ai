@@ -3,7 +3,8 @@ import { formatDateTime, formatInrFromPaise } from "@/lib/format";
 import { FAILURE_CATEGORY_LABELS, STRATEGY_LABELS } from "@/lib/types";
 import { STOP_REASON_LABELS } from "@/lib/stopping";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { validateSession } from "@/lib/auth/session";
 
 const PLAIN_ACTIONS: Record<string, string> = {
   diagnosed: "Analysed the failure",
@@ -32,10 +33,21 @@ export default async function PaymentDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const sessionResult = await validateSession();
+  if (!sessionResult) {
+    redirect("/login");
+  }
+  const { user } = sessionResult;
+
   const { id } = await params;
   const store = await readStore();
   const payment = store.payments.find((p) => p.id === id);
   if (!payment) notFound();
+
+  // IDOR protection: A regular customer cannot access another customer's payment details
+  if (user.role === "user" && (!user.customerId || payment.customerId !== user.customerId)) {
+    notFound();
+  }
 
   const customer = store.customers.find((c) => c.id === payment.customerId);
   const failure = store.failureEvents.find((f) => f.paymentId === id);
@@ -87,7 +99,7 @@ export default async function PaymentDetailPage({
             {formatInrFromPaise(payment.amountPaise)} · {FAILURE_CATEGORY_LABELS[failure.category]}
           </p>
         </div>
-        <Link href="/overview" className="text-sm text-accent hover:underline">← Back to Dashboard</Link>
+        <Link href={user.role === "user" ? "/customer/dashboard" : "/overview"} className="text-sm text-accent hover:underline">← Back to Dashboard</Link>
       </header>
 
       {/* Status + What Happened */}

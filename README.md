@@ -6,11 +6,14 @@ Autonomous payment recovery agent for the Razorpay Hackathon (Track 3: AI Revenu
 > All payment data shown in this app is **100% synthetic** and modelled on real Razorpay failure codes.
 > It is NOT real merchant data. It is generated deterministically with seed 42 and auto-loaded on first boot.
 
-## Demo login
+## Demo login (when DEMO_MODE=true)
 
-| Username | Password |
-|---|---|
-| `host` | `password` |
+| Role | Username / Email | Password | Destination |
+|---|---|---|---|
+| **Business Owner** | `host` or `host@recover.ai` | `password` | `/overview` (Admin Dashboard) |
+| **Customer** | `customer@recover.ai` or `customer` | `password` | `/customer/dashboard` (My Payments) |
+
+In production mode (`DEMO_MODE=false`), demo accounts are disabled and registration creates `user` accounts only. Owner accounts are created via seed script or owner invitation.
 
 ## Quick start
 
@@ -76,14 +79,19 @@ uvicorn main:app --reload --port 8000
 
 ## Env vars
 
-See `.env.example`. For Phase 2 they can stay empty except `RECOVER_AI_ENV=simulation`.
+See `.env.example`.
 
 | Variable | Purpose |
 |---|---|
-| `DATABASE_URL` | Postgres/Supabase (out of scope for simulation) |
-| `AGENT_URL` | Python agent (`http://127.0.0.1:8000`) |
-| `LLM_PROVIDER` | `mock` (deterministic simulation default) |
-| `RAZORPAY_KEY_ID` / `SECRET` | Test mode only (out of scope for simulation) |
+| `DATABASE_URL` | Hosted PostgreSQL (Neon / Supabase). On Vercel serverless, sessions, rate limits, OTPs, and lockouts live in Postgres. |
+| `DEMO_MODE` | `true` to enable demo accounts (`host` / `password`, `customer@recover.ai` / `password`). Default is `false` in production. |
+| `OTP_ENABLED` | `true` to require 6-digit email OTP 2FA for owner accounts (and optional for users). |
+| `RESEND_API_KEY` | Resend API key for sending real password reset and OTP emails. |
+| `RESEND_FROM` | Sender address (e.g. `Recover AI <onboarding@resend.dev>`). |
+| `AGENT_URL` | Python agent (`http://127.0.0.1:8000`). |
+| `LLM_PROVIDER` | `mock` (deterministic simulation default) or `openai`. |
+| `RAZORPAY_KEY_ID` / `SECRET` | Test mode only. |
+| `RECOVER_AI_ENV` | `development` or `production`. |
 
 ## Where the money figure will come from
 
@@ -93,7 +101,3 @@ Amounts are integer **paise**. Dashboard ₹ recovered is `sum(recovered_amount_
 
 `lib/stopping.ts` and `services/agent/stopping.py` — `MAX_AUTOMATED_ATTEMPTS = 3`. The agent fully computes and executes this stopping rule.
 
-## Known limitations (Phase 2)
-
-- File store (`store.json`), not Postgres yet.
-- Razorpay Test Mode is not wired into the UI to prevent demo failures; runs in pure simulation.

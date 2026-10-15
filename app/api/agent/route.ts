@@ -1,10 +1,16 @@
 import { NextResponse } from "next/server";
 import { runAgent } from "@/lib/agent/process";
+import { requireOwner, validateCsrf } from "@/lib/auth/guard";
 
 const AGENT_URL = process.env.AGENT_URL ?? "http://127.0.0.1:8000";
 
 export async function POST(request: Request) {
   try {
+    if (!validateCsrf(request)) {
+      return NextResponse.json({ error: "Invalid request origin." }, { status: 403 });
+    }
+    await requireOwner(request);
+
     const body = await request.json();
 
     // Try configured Python agent first; fall back to in-process TS agent

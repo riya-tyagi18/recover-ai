@@ -4,11 +4,17 @@ import { formatInrFromPaise } from "@/lib/format";
 import { FAILURE_CATEGORY_LABELS } from "@/lib/types";
 import { DashboardCharts } from "@/components/dashboard/DashboardCharts";
 import { computeDashboardChartData } from "@/lib/dashboard-data";
+import { redirect } from "next/navigation";
+import { validateSession } from "@/lib/auth/session";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
 export default async function OverviewPage() {
+  const sessionResult = await validateSession();
+  if (!sessionResult) redirect("/login");
+  if (sessionResult.user.role !== "owner") redirect("/customer/dashboard");
+
   const batch = await getLatestBatch();
 
   // Empty state handling
