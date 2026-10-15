@@ -3,9 +3,15 @@
 import { mutateStore } from "@/lib/db/store";
 import { NextResponse } from "next/server";
 import { Payment } from "@/lib/types";
+import { requireOwner, validateCsrf } from "@/lib/auth/guard";
 
 export async function POST(request: Request) {
   try {
+    if (!validateCsrf(request)) {
+      return NextResponse.json({ error: "Invalid request origin." }, { status: 403 });
+    }
+    await requireOwner(request);
+
     const { batchId } = await request.json();
     if (!batchId) {
       return NextResponse.json({ error: "Missing batchId" }, { status: 400 });

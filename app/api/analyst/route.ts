@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { processAnalystQuery, executeDeterministicTool, type AnalystToolName } from "@/lib/analyst/llm";
 import { getCustomer } from "@/lib/analyst/engine";
+import { requireOwner } from "@/lib/auth/guard";
 
 // ─── In-Memory Rate Limiting ──────────────────────────────────────────
 // 40 requests per minute per IP / client
@@ -52,17 +53,8 @@ const RequestSchema = z.object({
 
 export async function POST(request: Request) {
   try {
-    // 1. Auth verification (behind existing auth)
-    const authHeader = request.headers.get("x-rai-auth") || request.headers.get("authorization");
-    const cookieHeader = request.headers.get("cookie") || "";
-    const isClientAuthed =
-      authHeader === "1" ||
-      cookieHeader.includes("raiAuth=1") ||
-      request.headers.get("referer")?.includes("/analyst");
-
-    if (!isClientAuthed) {
-      return NextResponse.json({ error: "Unauthorized access. Please log in." }, { status: 401 });
-    }
+    // 1. Auth verification (owner-only)
+    await requireOwner(request);
 
     // 2. Rate limiting
     const clientIp =
@@ -158,7 +150,11 @@ export async function POST(request: Request) {
 
     const response = await processAnalystQuery(message, sessionContext);
     return NextResponse.json(response);
-  } catch (error) {
+  } catch (error: unknown) {
+    const status = (error as { status?: number }).status;
+    if (status) {
+      return NextResponse.json({ error: (error as Error).message }, { status });
+    }
     console.error("Analyst API error:", error);
     return NextResponse.json(
       { error: "Internal server error in Payment Recovery Analyst." },

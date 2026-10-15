@@ -12,6 +12,12 @@ import type {
   PaymentAttempt,
   RecoveryAction,
   RecoveryDecision,
+  User,
+  Session,
+  RateLimitRecord,
+  PasswordResetToken,
+  EmailOtp,
+  AuthAuditLog,
 } from "@/lib/types";
 
 export type StoreData = {
@@ -25,6 +31,12 @@ export type StoreData = {
   abExperiments: AbExperiment[];
   experimentAssignments: ExperimentAssignment[];
   auditLogs: AuditLog[];
+  users: User[];
+  sessions: Session[];
+  rateLimits: RateLimitRecord[];
+  passwordResets: PasswordResetToken[];
+  emailOtps: EmailOtp[];
+  authAuditLogs: AuthAuditLog[];
 };
 
 const isVercel = process.env.VERCEL === "1" || !!process.env.VERCEL_URL;
@@ -45,6 +57,12 @@ function emptyStore(): StoreData {
     abExperiments: [],
     experimentAssignments: [],
     auditLogs: [],
+    users: [],
+    sessions: [],
+    rateLimits: [],
+    passwordResets: [],
+    emailOtps: [],
+    authAuditLogs: [],
   };
 }
 
@@ -153,7 +171,17 @@ async function seedIfEmpty(store: StoreData): Promise<void> {
 async function loadStore(): Promise<StoreData> {
   try {
     const raw = await fs.readFile(DATA_PATH, "utf8");
-    return { ...emptyStore(), ...(JSON.parse(raw) as StoreData) };
+    const parsed = JSON.parse(raw) as Partial<StoreData>;
+    return {
+      ...emptyStore(),
+      ...parsed,
+      users: parsed.users ?? [],
+      sessions: parsed.sessions ?? [],
+      rateLimits: parsed.rateLimits ?? [],
+      passwordResets: parsed.passwordResets ?? [],
+      emailOtps: parsed.emailOtps ?? [],
+      authAuditLogs: parsed.authAuditLogs ?? [],
+    };
   } catch {
     return emptyStore();
   }

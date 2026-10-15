@@ -1,4 +1,8 @@
 import { AnalystChat } from "@/components/analyst/AnalystChat";
+import { redirect } from "next/navigation";
+import { validateSession } from "@/lib/auth/session";
+
+export const dynamic = "force-dynamic";
 
 export const metadata = {
   title: "Payment Recovery Analyst — Recover AI",
@@ -6,7 +10,10 @@ export const metadata = {
     "AI-powered payment recovery analyst and customer risk segmentation grounded in live transaction data.",
 };
 
-export default function AnalystPage() {
+export default async function AnalystPage() {
+  const sessionResult = await validateSession();
+  if (!sessionResult) redirect("/login");
+  if (sessionResult.user.role !== "owner") redirect("/customer/dashboard");
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
