@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "seed": "npx tsx scripts/seed-demo.ts",
+    "test:auth": "npx tsx scripts/test-auth.ts",
     "check-seed": "npx tsx scripts/check-seed.ts",
     "test": "npx tsx scripts/test-analyst.ts",
     "agent": "cd services/agent && uvicorn main:app --reload --port 8000"
@@ -28,6 +30,7 @@
     "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "dotenv": "^16.6.1",
     "eslint": "^9",
     "eslint-config-next": "16.3.3",
     "tailwindcss": "^4",

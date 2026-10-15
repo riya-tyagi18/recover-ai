@@ -17,6 +17,7 @@ export default function LoginPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [otpCode, setOtpCode] = useState("");
 
   // OTP state
@@ -26,26 +27,46 @@ export default function LoginPage() {
   // Status
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [demoMode, setDemoMode] = useState<boolean>(true);
+  // demoMode starts as false — we check the server on mount to avoid showing
+  // the demo panel when DEMO_MODE is off (e.g. on a production Vercel deployment).
+  const [demoMode, setDemoMode] = useState<boolean>(false);
 
-  // Check if session already exists
+  // On mount: redirect if already logged in, and fetch server-side demo flag
   useEffect(() => {
+    // Check existing session
     fetch("/api/auth/me")
-      .then((res) => {
-        if (res.ok) return res.json();
-        return null;
-      })
+      .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data?.user) {
-          if (data.user.role === "owner") {
-            router.push("/overview");
-          } else {
-            router.push("/customer/dashboard");
-          }
+          router.replace(data.user.role === "owner" ? "/overview" : "/customer/dashboard");
+        }
+      })
+      .catch(() => {});
+
+    // Fetch server-side demo flag (avoids hardcoding true on the client)
+    fetch("/api/auth/config")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && typeof data.demoMode === "boolean") {
+          setDemoMode(data.demoMode);
         }
       })
       .catch(() => {});
   }, [router]);
+
+  // Clear form fields when switching modes so data doesn't leak between views
+  function switchMode(next: AuthMode) {
+    setMode(next);
+    setError(null);
+    setPassword("");
+    setConfirmPassword("");
+  }
+
+  function switchTab(next: TabRole) {
+    setTabRole(next);
+    if (next === "owner") setMode("signin");
+    setError(null);
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -53,7 +74,15 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+      // ── Registration ──────────────────────────────────────────────────────
       if (mode === "register") {
+        // Client-side confirmPassword check (server validates everything else)
+        if (password !== confirmPassword) {
+          setError("Passwords do not match.");
+          setLoading(false);
+          return;
+        }
+
         const res = await fetch("/api/auth/register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -67,6 +96,7 @@ export default function LoginPage() {
         return;
       }
 
+      // ── OTP verification ──────────────────────────────────────────────────
       if (mode === "otp") {
         const res = await fetch("/api/auth/verify-otp", {
           method: "POST",
@@ -77,15 +107,11 @@ export default function LoginPage() {
         if (!res.ok) {
           throw new Error(data.error || "Invalid verification code.");
         }
-        if (data.user.role === "owner") {
-          router.push("/overview");
-        } else {
-          router.push("/customer/dashboard");
-        }
+        router.push(data.user.role === "owner" ? "/overview" : "/customer/dashboard");
         return;
       }
 
-      // mode === "signin"
+      // ── Sign in ───────────────────────────────────────────────────────────
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -94,7 +120,7 @@ export default function LoginPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || "Invalid credentials.");
+        throw new Error(data.error || "Incorrect username or password.");
       }
 
       if (data.requiresOtp) {
@@ -107,12 +133,7 @@ export default function LoginPage() {
         return;
       }
 
-      // Success
-      if (data.user.role === "owner") {
-        router.push("/overview");
-      } else {
-        router.push("/customer/dashboard");
-      }
+      router.push(data.user.role === "owner" ? "/overview" : "/customer/dashboard");
     } catch (err: unknown) {
       setError((err as Error).message || "An error occurred.");
     } finally {
@@ -125,6 +146,7 @@ export default function LoginPage() {
     setMode("signin");
     setEmail("host");
     setPassword("password");
+    setConfirmPassword("");
     setError(null);
   }
 
@@ -133,6 +155,7 @@ export default function LoginPage() {
     setMode("signin");
     setEmail("customer@recover.ai");
     setPassword("password");
+    setConfirmPassword("");
     setError(null);
   }
 
@@ -152,75 +175,13 @@ export default function LoginPage() {
 
         {/* Card */}
         <div className="rounded-2xl border border-border bg-surface p-6 sm:p-8 shadow-sm">
-          {mode !== "otp" && (
-            <>
-              {/* Role Toggle */}
-              <div className="mb-6 grid grid-cols-2 gap-1 rounded-xl bg-background p-1 border border-border">
-                <button
-                  type="button"
-                  id="tab-customer"
-                  onClick={() => {
-                    setTabRole("customer");
-                    setError(null);
-                  }}
-                  className={`rounded-lg py-2 text-xs font-medium transition-all ${
-                    tabRole === "customer"
-                      ? "bg-surface text-foreground shadow-sm font-semibold"
-                      : "text-muted hover:text-foreground"
-                  }`}
-                >
-                  Customer
-                </button>
-                <button
-                  type="button"
-                  id="tab-owner"
-                  onClick={() => {
-                    setTabRole("owner");
-                    setMode("signin");
-                    setError(null);
-                  }}
-                  className={`rounded-lg py-2 text-xs font-medium transition-all ${
-                    tabRole === "owner"
-                      ? "bg-surface text-foreground shadow-sm font-semibold"
-                      : "text-muted hover:text-foreground"
-                  }`}
-                >
-                  Business owner
-                </button>
-              </div>
-
-              {/* Sub-heading */}
-              <div className="mb-6">
-                <h2 className="font-display text-xl italic text-foreground">
-                  {tabRole === "customer"
-                    ? mode === "register"
-                      ? "Create customer account"
-                      : "Customer sign in"
-                    : "Business owner sign in"}
-                </h2>
-                <p className="text-xs text-muted mt-1">
-                  {tabRole === "customer"
-                    ? mode === "register"
-                      ? "Track your payment recoveries and subscription status"
-                      : "Sign in to view your payment history and recovery actions"
-                    : "Access dashboard analytics, strategy lab, and AI recovery agent"}
-                </p>
-              </div>
-            </>
-          )}
-
-          {/* OTP Screen */}
+          {/* ── OTP screen ─────────────────────────────────────────────── */}
           {mode === "otp" && (
             <div className="mb-6 space-y-4">
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    setMode("signin");
-                    setOtpCode("");
-                    setDemoOtpCode(null);
-                    setError(null);
-                  }}
+                  onClick={() => { setMode("signin"); setOtpCode(""); setDemoOtpCode(null); setError(null); }}
                   className="text-xs text-accent hover:underline flex items-center gap-1"
                 >
                   ← Back to sign in
@@ -246,8 +207,58 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* Form */}
+          {/* ── Role tabs (signin / register only) ───────────────────── */}
+          {mode !== "otp" && (
+            <>
+              <div className="mb-6 grid grid-cols-2 gap-1 rounded-xl bg-background p-1 border border-border">
+                <button
+                  type="button"
+                  id="tab-customer"
+                  onClick={() => switchTab("customer")}
+                  className={`rounded-lg py-2 text-xs font-medium transition-all ${
+                    tabRole === "customer"
+                      ? "bg-surface text-foreground shadow-sm font-semibold"
+                      : "text-muted hover:text-foreground"
+                  }`}
+                >
+                  Customer
+                </button>
+                <button
+                  type="button"
+                  id="tab-owner"
+                  onClick={() => switchTab("owner")}
+                  className={`rounded-lg py-2 text-xs font-medium transition-all ${
+                    tabRole === "owner"
+                      ? "bg-surface text-foreground shadow-sm font-semibold"
+                      : "text-muted hover:text-foreground"
+                  }`}
+                >
+                  Business owner
+                </button>
+              </div>
+
+              <div className="mb-6">
+                <h2 className="font-display text-xl italic text-foreground">
+                  {tabRole === "customer"
+                    ? mode === "register"
+                      ? "Create customer account"
+                      : "Customer sign in"
+                    : "Business owner sign in"}
+                </h2>
+                <p className="text-xs text-muted mt-1">
+                  {tabRole === "customer"
+                    ? mode === "register"
+                      ? "Track your payment recoveries and subscription status"
+                      : "Sign in to view your payment history and recovery actions"
+                    : "Access dashboard analytics, strategy lab, and AI recovery agent"}
+                </p>
+              </div>
+            </>
+          )}
+
+          {/* ── Form ─────────────────────────────────────────────────── */}
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Name — register only */}
             {mode === "register" && (
               <div className="space-y-1">
                 <label htmlFor="reg-name" className="block text-xs uppercase tracking-[0.14em] text-muted">
@@ -266,57 +277,76 @@ export default function LoginPage() {
               </div>
             )}
 
+            {/* Email / username — signin and register */}
             {mode !== "otp" && (
-              <>
-                <div className="space-y-1">
-                  <label htmlFor="auth-email" className="block text-xs uppercase tracking-[0.14em] text-muted">
-                    {tabRole === "owner" ? "Email or Username" : "Email address"}
-                  </label>
-                  <input
-                    id="auth-email"
-                    type="text"
-                    autoComplete="username"
-                    value={email}
-                    onChange={(e) => { setEmail(e.target.value); setError(null); }}
-                    className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted outline-none focus:border-accent transition-colors"
-                    placeholder={tabRole === "owner" ? "host or owner@recover.ai" : "you@example.com"}
-                    required
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <div className="flex justify-between items-center">
-                    <label htmlFor="auth-password" className="block text-xs uppercase tracking-[0.14em] text-muted">
-                      Password
-                    </label>
-                    {mode === "signin" && (
-                      <Link
-                        href="/forgot-password"
-                        className="text-xs text-accent hover:underline"
-                      >
-                        Forgot password?
-                      </Link>
-                    )}
-                  </div>
-                  <input
-                    id="auth-password"
-                    type="password"
-                    autoComplete={mode === "register" ? "new-password" : "current-password"}
-                    value={password}
-                    onChange={(e) => { setPassword(e.target.value); setError(null); }}
-                    className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted outline-none focus:border-accent transition-colors"
-                    placeholder={mode === "register" ? "Min 8 chars, letters and numbers" : "••••••••"}
-                    required
-                  />
-                  {mode === "register" && (
-                    <p className="text-[11px] text-muted pt-0.5">
-                      Must be at least 8 characters and contain both letters and numbers.
-                    </p>
-                  )}
-                </div>
-              </>
+              <div className="space-y-1">
+                <label htmlFor="auth-email" className="block text-xs uppercase tracking-[0.14em] text-muted">
+                  {tabRole === "owner" ? "Email or Username" : mode === "register" ? "Email address" : "Email address"}
+                </label>
+                <input
+                  id="auth-email"
+                  type="text"
+                  autoComplete={mode === "register" ? "email" : "username"}
+                  value={email}
+                  onChange={(e) => { setEmail(e.target.value); setError(null); }}
+                  className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted outline-none focus:border-accent transition-colors"
+                  placeholder={tabRole === "owner" ? "host or owner@recover.ai" : "you@example.com"}
+                  required
+                />
+              </div>
             )}
 
+            {/* Password — signin and register */}
+            {mode !== "otp" && (
+              <div className="space-y-1">
+                <div className="flex justify-between items-center">
+                  <label htmlFor="auth-password" className="block text-xs uppercase tracking-[0.14em] text-muted">
+                    Password
+                  </label>
+                  {mode === "signin" && (
+                    <Link href="/forgot-password" className="text-xs text-accent hover:underline">
+                      Forgot password?
+                    </Link>
+                  )}
+                </div>
+                <input
+                  id="auth-password"
+                  type="password"
+                  autoComplete={mode === "register" ? "new-password" : "current-password"}
+                  value={password}
+                  onChange={(e) => { setPassword(e.target.value); setError(null); }}
+                  className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted outline-none focus:border-accent transition-colors"
+                  placeholder={mode === "register" ? "Min 8 chars, letters and numbers" : "••••••••"}
+                  required
+                />
+                {mode === "register" && (
+                  <p className="text-[11px] text-muted pt-0.5">
+                    Must be at least 8 characters and contain both letters and numbers.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Confirm password — register only */}
+            {mode === "register" && (
+              <div className="space-y-1">
+                <label htmlFor="auth-confirm-password" className="block text-xs uppercase tracking-[0.14em] text-muted">
+                  Confirm password
+                </label>
+                <input
+                  id="auth-confirm-password"
+                  type="password"
+                  autoComplete="new-password"
+                  value={confirmPassword}
+                  onChange={(e) => { setConfirmPassword(e.target.value); setError(null); }}
+                  className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted outline-none focus:border-accent transition-colors"
+                  placeholder="Repeat your password"
+                  required
+                />
+              </div>
+            )}
+
+            {/* OTP code */}
             {mode === "otp" && (
               <div className="space-y-1">
                 <label htmlFor="auth-otp" className="block text-xs uppercase tracking-[0.14em] text-muted">
@@ -359,7 +389,7 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Toggle register / signin for customers */}
+          {/* ── Sign-up / sign-in toggle (customers) ─────────────────── */}
           {tabRole === "customer" && mode !== "otp" && (
             <div className="mt-5 text-center text-xs text-muted">
               {mode === "signin" ? (
@@ -367,7 +397,8 @@ export default function LoginPage() {
                   Don&apos;t have an account?{" "}
                   <button
                     type="button"
-                    onClick={() => { setMode("register"); setError(null); }}
+                    id="switch-register"
+                    onClick={() => switchMode("register")}
                     className="font-medium text-accent hover:underline"
                   >
                     Create customer account
@@ -378,7 +409,8 @@ export default function LoginPage() {
                   Already have an account?{" "}
                   <button
                     type="button"
-                    onClick={() => { setMode("signin"); setError(null); }}
+                    id="switch-signin"
+                    onClick={() => switchMode("signin")}
                     className="font-medium text-accent hover:underline"
                   >
                     Sign in
@@ -388,14 +420,14 @@ export default function LoginPage() {
             </div>
           )}
 
-          {tabRole === "owner" && (
+          {tabRole === "owner" && mode !== "otp" && (
             <p className="mt-5 text-center text-[11px] text-muted">
               Owner accounts are created via seed script or by invitation from an existing owner.
             </p>
           )}
         </div>
 
-        {/* Demo Hint Card (visible in demo mode) */}
+        {/* ── Demo Credentials Panel (only when demoMode is true server-side) ── */}
         {demoMode && (
           <div className="mt-6 rounded-2xl border border-border bg-surface p-4 text-xs space-y-2.5">
             <div className="flex items-center justify-between">
@@ -410,6 +442,7 @@ export default function LoginPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
               <button
                 type="button"
+                id="fill-demo-owner"
                 onClick={fillDemoOwner}
                 className="flex flex-col text-left rounded-xl border border-border bg-background p-2.5 hover:border-accent transition-colors"
               >
@@ -422,6 +455,7 @@ export default function LoginPage() {
 
               <button
                 type="button"
+                id="fill-demo-customer"
                 onClick={fillDemoCustomer}
                 className="flex flex-col text-left rounded-xl border border-border bg-background p-2.5 hover:border-accent transition-colors"
               >

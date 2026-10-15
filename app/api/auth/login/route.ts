@@ -21,6 +21,23 @@ import {
   DEMO_CUSTOMER_EMAIL,
 } from "@/lib/auth/seed";
 import { hasMailProvider, sendEmail } from "@/lib/auth/mail";
+import type { User } from "@/lib/types";
+
+/** Reusable response helpers — keeps the error strings in one place */
+const badCredentials = (startTime: number) =>
+  uniformTiming(startTime).then(() =>
+    NextResponse.json({ error: "Incorrect username or password." }, { status: 401 })
+  );
+
+const serverError = (startTime: number, err: unknown) => {
+  console.error("[login] database / internal error:", err);
+  return uniformTiming(startTime).then(() =>
+    NextResponse.json(
+      { error: "Something went wrong, please try again." },
+      { status: 500 }
+    )
+  );
+};
 
 export async function POST(request: Request) {
   const startTime = Date.now();
@@ -32,171 +49,164 @@ export async function POST(request: Request) {
   }
 
   // Rate limit: max 20 login attempts per minute per IP
-  const ipLimit = await checkIpRateLimit(ip, "login", 20, 60 * 1000);
+  let ipLimit: { allowed: boolean; remaining: number; error?: string };
+  try {
+    ipLimit = await checkIpRateLimit(ip, "login", 20, 60 * 1000);
+  } catch (err) {
+    return serverError(startTime, err);
+  }
   if (!ipLimit.allowed) {
     return NextResponse.json({ error: ipLimit.error }, { status: 429 });
   }
 
+  // Parse body
+  const body = await request.json().catch(() => ({}));
+  const { email, password } = body as { email?: unknown; password?: unknown };
+
+  if (!email || !password || typeof email !== "string" || typeof password !== "string") {
+    await uniformTiming(startTime);
+    return NextResponse.json({ error: "Email and password are required." }, { status: 400 });
+  }
+
+  let searchEmail = email.trim().toLowerCase();
+  const demo = isDemoMode();
+
+  // Map shorthand aliases to real emails (demo mode only)
+  if (demo) {
+    if (searchEmail === DEMO_OWNER_ALIAS) searchEmail = DEMO_OWNER_EMAIL;
+    else if (searchEmail === DEMO_CUSTOMER_ALIAS) searchEmail = DEMO_CUSTOMER_EMAIL;
+  } else {
+    // In production (DEMO_MODE=false/unset) reject bare aliases
+    if (searchEmail === DEMO_OWNER_ALIAS || searchEmail === DEMO_CUSTOMER_ALIAS) {
+      await dummyVerify(password);
+      return badCredentials(startTime);
+    }
+  }
+
+  // ── Look up user (DB errors → 500, not 401) ──────────────────────────────
+  let user: User | null;
   try {
-    const body = await request.json().catch(() => ({}));
-    const { email, password } = body;
+    user = await findUserByEmail(searchEmail);
+  } catch (err) {
+    return serverError(startTime, err);
+  }
 
-    if (!email || !password || typeof email !== "string" || typeof password !== "string") {
-      await uniformTiming(startTime);
-      return NextResponse.json(
-        { error: "Email and password are required." },
-        { status: 400 },
-      );
-    }
-
-    let searchEmail = email.trim().toLowerCase();
-    const demo = isDemoMode();
-
-    // Map demo aliases if demo mode is enabled
-    if (demo) {
-      if (searchEmail === DEMO_OWNER_ALIAS) {
-        searchEmail = DEMO_OWNER_EMAIL;
-      } else if (searchEmail === DEMO_CUSTOMER_ALIAS) {
-        searchEmail = DEMO_CUSTOMER_EMAIL;
-      }
-    } else {
-      // In production mode, reject demo shorthand aliases
-      if (searchEmail === DEMO_OWNER_ALIAS || searchEmail === DEMO_CUSTOMER_ALIAS) {
-        await dummyVerify(password);
-        await uniformTiming(startTime);
-        return NextResponse.json(
-          { error: "Invalid email or password." },
-          { status: 401 },
-        );
-      }
-    }
-
-    let user = await findUserByEmail(searchEmail);
-
-    // If demo mode is active and user is missing, seed demo accounts
-    if (!user && demo && (searchEmail === DEMO_OWNER_EMAIL || searchEmail === DEMO_CUSTOMER_EMAIL)) {
+  // Auto-seed demo accounts on first login attempt if they don't exist yet
+  if (!user && demo && (searchEmail === DEMO_OWNER_EMAIL || searchEmail === DEMO_CUSTOMER_EMAIL)) {
+    try {
       await seedAuthAccounts();
       user = await findUserByEmail(searchEmail);
+    } catch (err) {
+      return serverError(startTime, err);
     }
+  }
 
-    // If user does not exist in the database
-    if (!user) {
-      await dummyVerify(password);
-      await recordFailedLogin(null, ip, userAgent);
-      await uniformTiming(startTime);
+  // Unknown user
+  if (!user) {
+    await dummyVerify(password); // constant-time
+    try { await recordFailedLogin(null, ip, userAgent); } catch { /* audit failure is non-fatal */ }
+    return badCredentials(startTime);
+  }
+
+  // ── Lockout check ─────────────────────────────────────────────────────────
+  let locked: boolean;
+  try {
+    locked = await isAccountLocked(user);
+  } catch (err) {
+    return serverError(startTime, err);
+  }
+  if (locked) {
+    await dummyVerify(password);
+    await uniformTiming(startTime);
+    return NextResponse.json(
+      { error: "This account has been temporarily locked due to too many failed attempts. Please try again in 15 minutes." },
+      { status: 429 }
+    );
+  }
+
+  // ── Verify password ───────────────────────────────────────────────────────
+  let passwordValid: boolean;
+  try {
+    passwordValid = await verifyPassword(password, user.passwordHash);
+  } catch (err) {
+    return serverError(startTime, err);
+  }
+
+  if (!passwordValid) {
+    let lockResult: { locked: boolean; lockedUntil: string | null } = { locked: false, lockedUntil: null };
+    try { lockResult = await recordFailedLogin(user, ip, userAgent); } catch { /* audit failure is non-fatal */ }
+    await uniformTiming(startTime);
+    if (lockResult.locked) {
       return NextResponse.json(
-        { error: "Invalid email or password." },
-        { status: 401 },
+        { error: "Too many failed attempts. Your account has been temporarily locked for 15 minutes." },
+        { status: 429 }
       );
     }
+    return NextResponse.json({ error: "Incorrect username or password." }, { status: 401 });
+  }
 
-    // Check if account is locked
-    const locked = await isAccountLocked(user);
-    if (locked) {
-      await dummyVerify(password);
-      await uniformTiming(startTime);
-      return NextResponse.json(
-        { error: "This account has been temporarily locked due to too many failed attempts. Please try again in 15 minutes." },
-        { status: 429 },
-      );
-    }
+  // ── OTP 2FA ───────────────────────────────────────────────────────────────
+  const isOtpRequired =
+    process.env.OTP_ENABLED === "true" && (user.role === "owner" || user.otpEnabled);
 
-    // Verify password with bcrypt
-    const passwordValid = await verifyPassword(password, user.passwordHash);
-    if (!passwordValid) {
-      const lockResult = await recordFailedLogin(user, ip, userAgent);
-      await uniformTiming(startTime);
-      if (lockResult.locked) {
-        return NextResponse.json(
-          { error: "Too many failed attempts. Your account has been temporarily locked for 15 minutes." },
-          { status: 429 },
-        );
-      }
-      return NextResponse.json(
-        { error: "Invalid email or password." },
-        { status: 401 },
-      );
-    }
+  if (isOtpRequired) {
+    const otpCode = Math.floor(100000 + crypto.randomInt(900000)).toString();
+    const codeHash = crypto.createHash("sha256").update(otpCode).digest("hex");
+    const otpId = `otp_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
 
-    // Check OTP requirement:
-    // Required for owner accounts when OTP_ENABLED is "true", or when user has enabled OTP
-    const isOtpRequired =
-      process.env.OTP_ENABLED === "true" && (user.role === "owner" || user.otpEnabled);
-
-    if (isOtpRequired) {
-      // Generate 6-digit code
-      const otpCode = Math.floor(100000 + crypto.randomInt(900000)).toString();
-      const codeHash = crypto.createHash("sha256").update(otpCode).digest("hex");
-      const otpId = `otp_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
-      const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 min
-
-      await createEmailOtp({
-        id: otpId,
-        userId: user.id,
-        codeHash,
-        expiresAt,
-        attempts: 0,
-        used: false,
-        createdAt: new Date().toISOString(),
-      });
-
-      // Send code via email
+    try {
+      await createEmailOtp({ id: otpId, userId: user.id, codeHash, expiresAt, attempts: 0, used: false, createdAt: new Date().toISOString() });
       await sendEmail({
         to: user.email,
         subject: "Your Recover AI verification code",
         text: `Your verification code is ${otpCode}. It expires in 10 minutes.`,
         html: `<p>Your Recover AI verification code is: <strong>${otpCode}</strong></p><p>This code expires in 10 minutes.</p>`,
       });
-
-      await uniformTiming(startTime);
-
-      // In demo mode without configured mail provider, provide demoOtpCode for smooth verification
-      const mailConfigured = hasMailProvider();
-      if (demo && !mailConfigured) {
-        return NextResponse.json({
-          requiresOtp: true,
-          userId: user.id,
-          demoOtpCode: otpCode,
-        });
-      }
-
-      // In production mode, code is NEVER returned to client
-      return NextResponse.json({
-        requiresOtp: true,
-        userId: user.id,
-      });
+    } catch (err) {
+      return serverError(startTime, err);
     }
 
-    // Success without OTP
-    await recordSuccessfulLogin(user, ip, userAgent);
-    const { rawToken } = await createSession(user.id, request);
-
-    const cookieStore = await cookies();
-    cookieStore.set(SESSION_COOKIE_NAME, rawToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 8 * 60 * 60,
-    });
-
     await uniformTiming(startTime);
 
-    return NextResponse.json({
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role, // Returned from database, never from client
-        customerId: user.customerId,
-      },
-    });
-  } catch (err) {
-    console.error("Login error:", err);
-    await uniformTiming(startTime);
-    return NextResponse.json(
-      { error: "An unexpected error occurred during login." },
-      { status: 500 },
-    );
+    // In demo mode without a real mail provider, surface the code in the response
+    const mailConfigured = hasMailProvider();
+    if (demo && !mailConfigured) {
+      return NextResponse.json({ requiresOtp: true, userId: user.id, demoOtpCode: otpCode });
+    }
+    return NextResponse.json({ requiresOtp: true, userId: user.id });
   }
+
+  // ── Success — create session ──────────────────────────────────────────────
+  try {
+    await recordSuccessfulLogin(user, ip, userAgent);
+  } catch { /* audit failure is non-fatal */ }
+
+  let rawToken: string;
+  try {
+    ({ rawToken } = await createSession(user.id, request));
+  } catch (err) {
+    return serverError(startTime, err);
+  }
+
+  const cookieStore = await cookies();
+  cookieStore.set(SESSION_COOKIE_NAME, rawToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 8 * 60 * 60,
+  });
+
+  await uniformTiming(startTime);
+
+  return NextResponse.json({
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role, // always from DB, never from client
+      customerId: user.customerId,
+    },
+  });
 }
